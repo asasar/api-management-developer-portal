@@ -20,7 +20,9 @@
         "build-runner": "webpack --config webpack.publish.runner.js",
         "deploy-editors": "npm run build-designer && npm run build-runner && node ./scripts/editorsToBlob.js",
         "deploy-function": "npm run build-function && cd dist/function && func azure functionapp publish < function app name >",
-        "postinstall": "npm rebuild node-sass"
+        "postinstall": "npm rebuild node-sass",
+        "build-designer-managed": "webpack --config webpack.designer.managed.js",
+        "build-publisher-managed": "webpack --config webpack.publisher.managed.js"
     },
     "devDependencies": {
         "@types/chai": "^4.1.7",
