@@ -32,20 +32,16 @@ export class MapiClient {
         private readonly authenticator: IAuthenticator,
         private readonly settingsProvider: ISettingsProvider,
         private readonly router: Router,
-    ) {
-        this.ensureInitialized();
-    }
+    ) { }
 
     private async ensureInitialized(): Promise<void> {
         if (!this.initializePromise) {
-            this.initializePromise = this.setup();
+            this.initializePromise = this.initialize();
         }
-        else {
-            return this.initializePromise;
-        }
+        return this.initializePromise;
     }
 
-    private async setup(): Promise<void> {
+    private async initialize(): Promise<void> {
         const settings = await this.settingsProvider.getSettings();
 
         const managementApiUrl = settings["managementApiUrl"];
@@ -159,6 +155,7 @@ export class MapiClient {
 
     private handleResponse<T>(response: HttpResponse<T>, url: string): T {
         let contentType = "";
+
         if (response.headers) {
             const authTokenHeader = response.headers.find(header => header.name === "ocp-apim-sas-token");
 
