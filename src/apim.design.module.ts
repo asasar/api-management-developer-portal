@@ -2,7 +2,6 @@ import { UnsavedChangesRouteGuard } from "./routing/unsavedChangesRouteGuard";
 import { MapiObjectStorage } from "./persistence/mapiObjectStorage";
 import { DefaultAuthenticator } from "./components/defaultAuthenticator";
 import { AccessTokenRouteGuard } from "./routing/accessTokenRouteGuard";
-import { MapiClient } from "./services/mapiClient";
 import { IInjector, IInjectorModule } from "@paperbits/common/injection";
 import { ListOfApisModule } from "./components/apis/list-of-apis/ko/listOfApis.module";
 import { ListOfApisEditorModule } from "./components/apis/list-of-apis/ko/listOfApisEditor.module";
@@ -10,6 +9,8 @@ import { DetailsOfApiModule } from "./components/apis/details-of-api/ko/detailsO
 import { DetailsOfApiEditorModule } from "./components/apis/details-of-api/ko/detailsOfApiEditor.module";
 import { UserSigninModule } from "./components/users/user-signin/ko/userSignin.module";
 import { UserSigninEditorModule } from "./components/users/user-signin/ko/userSigninEditor.module";
+import { UserSigninSocialModule } from "./components/users/user-signin-social/ko/userSigninSocial.module";
+import { UserSigninSocialEditorModule } from "./components/users/user-signin-social/ko/userSigninSocialEditor.module";
 import { UserSignupModule } from "./components/users/user-signup/ko/userSignup.module";
 import { UserSignupEditorModule } from "./components/users/user-signup/ko/userSignupEditor.module";
 import { UserDetailsModule } from "./components/users/user-details/ko/userDetails.module";
@@ -18,7 +19,7 @@ import { UserSubscriptionsModule } from "./components/users/user-subscriptions/k
 import { UserSubscriptionsEditorModule } from "./components/users/user-subscriptions/ko/userSubscriptionsEditor.module";
 import { ProductDetailsModule } from "./components/products/product-details/ko/productDetails.module";
 import { ProductDetailsEditorModule } from "./components/products/product-details/ko/productDetailsEditor.module";
-import { UserService } from "./services/userService";
+import { MapiClient, UserService, IdentityService } from "./services";
 import { AzureBlobStorage } from "@paperbits/azure";
 import { SetupModule } from "./components/setup/setup.module";
 import { PublishingModule } from "./components/publishing";
@@ -35,7 +36,10 @@ import { ProductApisModule } from "./components/products/product-apis/ko/product
 import { ProductApisEditorModule } from "./components/products/product-apis/ko/productApisEditor.module";
 import { ProductSubscriptionsEditorModule } from "./components/products/product-subscriptions/ko/productSubscriptionsEditor.module";
 import { ProductSubscriptionsModule } from "./components/products/product-subscriptions/ko/productSubscriptions.module";
-import { App } from "./app/app";
+import { App } from "./components/app/app";
+import { ReportsModule } from "./components/reports/ko/reports.module";
+import { ReportsEditorModule } from "./components/reports/ko/reportsEditor.module";
+import { HelpModule } from "./components/help";
 
 
 export class ApimDesignModule implements IInjectorModule {
@@ -47,6 +51,8 @@ export class ApimDesignModule implements IInjectorModule {
         injector.bindModule(new DetailsOfApiEditorModule());
         injector.bindModule(new UserSigninModule());
         injector.bindModule(new UserSigninEditorModule());
+        injector.bindModule(new UserSigninSocialModule());
+        injector.bindModule(new UserSigninSocialEditorModule());
         injector.bindModule(new UserSignupModule());
         injector.bindModule(new UserSignupEditorModule());
         injector.bindModule(new UserDetailsModule());
@@ -68,10 +74,14 @@ export class ApimDesignModule implements IInjectorModule {
         injector.bindModule(new OperationListEditorModule());
         injector.bindModule(new OperationDetailsModule());
         injector.bindModule(new OperationDetailsEditorModule());
+        injector.bindModule(new ReportsModule());
+        injector.bindModule(new ReportsEditorModule());
+        injector.bindModule(new HelpModule());
         injector.bindSingleton("app", App);
         injector.bindSingleton("blobStorage", AzureBlobStorage);
         injector.bindSingleton("userService", UserService);
-        injector.bindSingleton("smapiClient", MapiClient);
+        injector.bindSingleton("identityService", IdentityService);
+        injector.bindSingleton("mapiClient", MapiClient);
         injector.bindSingleton("authenticator", DefaultAuthenticator);
         injector.bindSingleton("objectStorage", MapiObjectStorage);
         injector.bindToCollection("routeGuards", UnsavedChangesRouteGuard);
