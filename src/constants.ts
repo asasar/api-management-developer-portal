@@ -20,4 +20,10 @@ export const TypeOfApi = {
 export const signinUrl = "/signin";
 export const profileUrl = "/profile";
 export const homeUrl = "/";
-export const defaultPageSize = 10;
+
+/**
+ * Maximum number of items to show in a paginated view.
+ */
+export const defaultPageSize = 50;
+export const apiReferencePageUrl = "/reference";
+export const defaultInputDelayMs = 600;
