@@ -34,8 +34,6 @@ ko.bindingHandlers["barChart"] = {
             .create("svg")
             .attr("viewBox", [0, 0, width, height]);
 
-        console.info(configuration.startTime);
-
         /* Axis X */
         const x = d3.scaleTime()
             .domain([configuration.startTime, configuration.endTime])
@@ -107,7 +105,7 @@ ko.bindingHandlers["barChart"] = {
             const legendNode = svg.append("text")
                 .attr("x", (legendColumn * legendColumnWidth) + margin.left + 25 + legendColumnWidth - 50)
                 .attr("y", height - (legendLines * legendRowHeight) + (legendRow * legendRowHeight) + 12 + legendPadding)
-                .text(123)
+                .text("-")
                 .style("font-size", fontSize)
                 .attr("text-anchor", "end")
                 .attr("alignment-baseline", "middle");

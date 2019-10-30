@@ -4,19 +4,16 @@ import { Subscription } from "../models/subscription";
 import { Product } from "../models/product";
 import { SubscriptionContract, SubscriptionState } from "../contracts/subscription";
 import { ProductContract } from "../contracts/product";
-import { TenantSettings } from "../contracts/tenantSettings";
 import { TenantService } from "../services/tenantService";
 import { HttpHeader } from "@paperbits/common/http";
 import * as Constants from "../constants";
 import { Utils } from "../utils";
-import { PatternFilter } from "../contracts/nameFilter";
+import { SearchQuery } from "../contracts/searchQuery";
 
 /**
  * A service for management operations with products.
  */
 export class ProductService {
-    private tenantSettings: TenantSettings;
-
     constructor(
         private readonly mapiClient: MapiClient,
         private readonly tenantService: TenantService
@@ -25,21 +22,24 @@ export class ProductService {
     /**
      * Returns user subscriptions.
      * @param userId {string} User unique identifier.
+     * @param productName {string} Product unique identifier.
      */
-    public async getSubscriptions(userId: string): Promise<Page<Subscription>> {
+    public async getSubscriptions(userId: string, productName?: string): Promise<Page<Subscription>> {
         if (!userId) {
             throw new Error(`Parameter "userId" not specified.`);
         }
 
         const pageOfSubscriptions = new Page<Subscription>();
+        const query = !productName ? "" : `?$filter=contains(properties/scope,'/products/${productName}')`;
 
         try {
-            const pageContract = await this.mapiClient.get<Page<SubscriptionContract>>(`${userId}/subscriptions`);
+            const pageContract = await this.mapiClient.get<Page<SubscriptionContract>>(`${userId}/subscriptions${query}`);
 
             pageOfSubscriptions.value = pageContract && pageContract.value
-                ? pageContract.value.filter(item => item.properties.scope.indexOf("/products/") !== -1).map(item => new Subscription(item))
-                : [];
+                ? pageContract.value.map(item => new Subscription(item)) : [];
 
+            pageOfSubscriptions.count = pageContract.count;
+            pageOfSubscriptions.nextLink = pageContract.nextLink;
             return pageOfSubscriptions;
         }
         catch (error) {
@@ -47,7 +47,7 @@ export class ProductService {
                 return pageOfSubscriptions;
             }
 
-            throw new Error(`Unable to retrieve subscriptions for user with ID "${userId}": ${error}`);
+            throw new Error(`Unable to retrieve subscriptions for user with ID "${userId}". Error: ${error.message}`);
         }
     }
 
@@ -56,7 +56,7 @@ export class ProductService {
      * @param userId {string} User unique identifier.
      * @param productId {string} Product unique identifier.
      */
-    public async getSubscriptionsForProduct(userId: string, productId: string): Promise<Subscription[]> {
+    public async getSubscriptionsForProduct(userId: string, productId: string): Promise<Page<Subscription>> {
         if (!userId) {
             throw new Error(`Parameter "userId" not specified.`);
         }
@@ -66,20 +66,15 @@ export class ProductService {
         }
 
         try {
-            const pageOfSubscriptions = await this.getSubscriptions(userId);
-
-            const subscriptions = pageOfSubscriptions.value.filter(subscription => subscription.state === "active");
-            const result = subscriptions.filter(subscription => subscription.productId === productId);
-
-            return result;
-
+            const pageOfSubscriptions = await this.getSubscriptions(userId, productId);
+            return pageOfSubscriptions;
         }
         catch (error) {
             if (error && error.code === "ResourceNotFound") {
-                return [];
+                return new Page();
             }
 
-            throw new Error(`Unable to retrieve subscriptions for user with ID "${userId}": ${error}`);
+            throw new Error(`Unable to retrieve subscriptions for user with ID "${userId}". Error: ${error.message}`);
         }
     }
 
@@ -102,8 +97,8 @@ export class ProductService {
                 .filter(item => item.properties.scope.indexOf("/products/") !== -1)
                 .map((item) => {
                     const model = new Subscription(item);
-                    const product = products.find(p => p.id === model.productId);
-                    model.productName = product && product.name;
+                    const product = products.find(p => p.id === model.scope);
+                    model.productName = product && product.displayName;
                     result.push(model);
                 });
         }
@@ -116,7 +111,7 @@ export class ProductService {
      * @param subscriptionId subscriptionId {string} Subscription unique identifier.
      * @param loadProduct {boolean} Indicates whether products should be included.
      */
-    public async getSubscription(subscriptionId: string, loadProduct: boolean = true): Promise<Subscription> {
+    public async getSubscription(subscriptionId: string): Promise<Subscription> {
         if (!subscriptionId) {
             throw new Error(`Parameter "subscriptionId" not specified.`);
         }
@@ -128,14 +123,7 @@ export class ProductService {
         }
 
         if (contract) {
-            const model = new Subscription(contract);
-
-            if (loadProduct) {
-                const product = await this.getProduct(model.productId);
-                model.productName = product && product.name;
-            }
-
-            return model;
+            return new Subscription(contract);
         }
     }
 
@@ -164,7 +152,7 @@ export class ProductService {
     /**
      * Returns page of products filtered by name.
      */
-    public async getProductsPage(filter: PatternFilter ): Promise<Page<Product>> {
+    public async getProductsPage(filter: SearchQuery): Promise<Page<Product>> {
         const skip = filter.skip || 0;
         const take = filter.take || Constants.defaultPageSize;    
         let query = `/products?$top=${take}&$skip=${skip}`;
@@ -236,10 +224,10 @@ export class ProductService {
             throw new Error(`Parameter "userId" not specified.`);
         }
 
-        await this.loadTenantSettings();
+        const isDelegationEnabled = await this.tenantService.isSubscriptionDelegationEnabled();
 
-        if (this.tenantSettings["CustomPortalSettings.DelegationEnabled"] === true) {
-            console.log("Delegation enabled. Can't create subscription");
+        if (isDelegationEnabled) {
+            console.warn("Delegation enabled. Can't create subscription.");
         }
         else {
             const data = {
@@ -259,10 +247,10 @@ export class ProductService {
             throw new Error(`Parameter "subscriptionId" not specified.`);
         }
 
-        await this.loadTenantSettings();
+        const isDelegation = await this.tenantService.isSubscriptionDelegationEnabled();
 
-        if (this.tenantSettings["CustomPortalSettings.DelegationEnabled"] === true) {
-            console.log("Delegation enabled. Can't cancel subscription");
+        if (isDelegation) {
+            console.warn("Delegation enabled. Can't cancel subscription");
         } else {
             await this.updateSubscription(subscriptionId, { state: SubscriptionState.cancelled });
         }
@@ -276,7 +264,9 @@ export class ProductService {
      * @param newName {string} New subscription name.
      */
     public async renameSubscription(subscriptionId: string, newName: string): Promise<Subscription> {
-        await this.loadTenantSettings();
+        if (!subscriptionId) {
+            throw new Error(`Parameter "subscriptionId" not specified.`);
+        }
 
         if (newName) {
             await this.updateSubscription(subscriptionId, { name: newName });
@@ -297,11 +287,5 @@ export class ProductService {
         };
 
         await this.mapiClient.patch(subscriptionId, [header], body);
-    }
-
-    private async loadTenantSettings(): Promise<void> {
-        if (!this.tenantSettings) {
-            this.tenantSettings = await this.tenantService.getSettings();
-        }
     }
 }

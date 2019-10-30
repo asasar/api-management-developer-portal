@@ -4,6 +4,8 @@ import template from "./signin-aad.html";
 import { Router } from "@paperbits/common/routing";
 import { Component, RuntimeComponent, Param } from "@paperbits/common/ko/decorators";
 import { AadService } from "../../../../../services";
+import { EventManager } from "@paperbits/common/events";
+import { ValidationReport } from "../../../../../contracts/validationReport";
 
 
 @RuntimeComponent({
@@ -15,32 +17,40 @@ import { AadService } from "../../../../../services";
     injectable: "signInAad"
 })
 export class SignInAad {
-    public readonly errorMessages: ko.ObservableArray<string>;
-    public readonly hasErrors: ko.Observable<boolean>;
-
     constructor(
         private readonly router: Router,
-        private readonly aadService: AadService
+        private readonly aadService: AadService,
+        private readonly eventManager: EventManager
     ) {
         this.clientId = ko.observable();
-        this.errorMessages = ko.observableArray([]);
-        this.hasErrors = ko.observable(false);
+        this.signinTenant = ko.observable();
     }
 
     @Param()
     public clientId: ko.Observable<string>;
+
+    @Param()
+    public signinTenant: ko.Observable<string>;
 
     /**
      * Initiates signing-in with Azure Active Directory.
      */
     public async signIn(): Promise<void> {
         try {
-            await this.aadService.signInWithAad(this.clientId());
-            await this.router.navigateTo(Constants.homeUrl);
+            await this.aadService.signInWithAad(this.clientId(), this.signinTenant());
+            await this.router.navigateTo(Constants.pageUrlHome);
+            const validationReport: ValidationReport = {
+                source: "socialAcc",
+                errors: []
+            };
+            this.eventManager.dispatchEvent("onValidationErrors",validationReport);
         }
         catch (error) {
-            this.hasErrors(true);
-            this.errorMessages([error.message]);
+            const validationReport: ValidationReport = {
+                source: "socialAcc",
+                errors: [error.message]
+            };
+            this.eventManager.dispatchEvent("onValidationErrors",validationReport);
         }
     }
 }

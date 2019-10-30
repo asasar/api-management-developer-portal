@@ -2,16 +2,8 @@
 <p>Create request was sent. Please check your email.</p>
 <!-- /ko -->
 
-<!-- ko if: (!isUserRequested() && !isUserLoggedIn()) -->
-
-<form>
-    <div class="text-hide alert alert-danger" role="region" aria-live="assertive" aria-atomic="true"
-        data-bind="css: { 'text-hide': !hasErrors() }">
-        <!-- ko foreach: { data: errorMessages, as: 'errorMessage' } -->
-            <div data-bind="text: errorMessage"></div>
-        <!-- /ko -->
-    </div>
-
+<!-- ko ifnot: isUserRequested -->
+<form data-bind="submit: signup">
     <fieldset>
         <div class="form-group">
             <label for="email">Email</label>
@@ -40,6 +32,10 @@
                 placeholder="e.g. Doe" type="text" data-bind="textInput: lastName">
         </div>
 
+        <!-- ko if: requireHipCaptcha -->
+        <hip-captcha></hip-captcha>
+        <!-- /ko -->       
+        
         <!-- ko if: termsOfUse -->
         <div class="form-group">
             <!-- ko if: isConsentRequired -->
@@ -68,7 +64,7 @@
         <!-- /ko -->
 
         <div class="form-group">
-            <button type="button" id="signup" class="button button-primary" data-bind="click: signup, enable: canSubmit">
+            <button type="button" id="signup" class="button button-primary" data-bind="click: signup">
                 Sign up
             </button>
         </div>

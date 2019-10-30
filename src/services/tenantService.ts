@@ -1,7 +1,8 @@
-import { TenantSettings } from "../contracts/tenantSettings";
+import { TenantSettings, DelegationParameters, DelegationAction } from "../contracts/tenantSettings";
 import { MapiClient } from "./mapiClient";
 import { ISettingsProvider } from "@paperbits/common/configuration";
-
+import * as nodeCrypto from "crypto";
+import { HttpClient } from "@paperbits/common/http/httpClient";
 
 /**
  * A service for management operations with API Management tenant.
@@ -9,6 +10,7 @@ import { ISettingsProvider } from "@paperbits/common/configuration";
 export class TenantService {
     constructor(
         private readonly mapiClient: MapiClient,
+        private readonly httpClient: HttpClient,
         private readonly settingsProvider: ISettingsProvider
     ) { }
 
@@ -16,7 +18,6 @@ export class TenantService {
      * Returns tenant settings.
      */
     public async getSettings(): Promise<TenantSettings> {
-        /* TODO: User proper service container */
         const result = await this.mapiClient.get("/tenant/settings");
         return result && result["settings"];
     }
@@ -25,18 +26,20 @@ export class TenantService {
      * Returns API Management service name.
      */
     public async getServiceName(): Promise<string> {
-        /* TODO: User proper service container */
-        const managementApiUrl = await this.settingsProvider.getSetting<string>("managementApiUrl");
-        const regex = /https:\/\/([\w\-]*)\./gm;
-        const match = regex.exec(managementApiUrl);
+        return location.hostname;
 
-        if (match && match.length > 0) {
-            const serviceName = match[1];
-            return serviceName;
-        }
-        else {
-            return "";
-        }
+        // /* TODO: User proper service container */
+        // const managementApiUrl = await this.settingsProvider.getSetting<string>("managementApiUrl");
+        // const regex = /https:\/\/([\w\-]*)\./gm;
+        // const match = regex.exec(managementApiUrl);
+
+        // if (match && match.length > 0) {
+        //     const serviceName = match[1];
+        //     return serviceName;
+        // }
+        // else {
+        //     return "";
+        // }
     }
 
     /**
@@ -68,8 +71,19 @@ export class TenantService {
      * TODO: Not implemented.
      */
     public async getProxyHostnames(): Promise<string[]> {
-        /* TODO: User proper service container */
-        const serviceName = await this.getServiceName();
-        return [`${serviceName}.azure-api.net`];
+        const setting = await this.settingsProvider.getSetting<string>("proxyHostnames");
+        const hostnames = setting ? setting.split(";") : [];
+        return hostnames;
+    }
+
+    public async isDelegationEnabled(loadedSettings?: TenantSettings): Promise<boolean> {
+        const tenantSettings = loadedSettings || await this.getSettings();
+        return tenantSettings && tenantSettings["CustomPortalSettings.DelegationEnabled"] && tenantSettings["CustomPortalSettings.DelegationEnabled"].toLowerCase() === "true";
+    }
+
+    public async isSubscriptionDelegationEnabled(): Promise<boolean> {
+        const tenantSettings = await this.getSettings();
+        const delegationEnabled = await this.isDelegationEnabled(tenantSettings);
+        return delegationEnabled && tenantSettings["CustomPortalSettings.DelegatedSubscriptionEnabled"] && tenantSettings["CustomPortalSettings.DelegatedSubscriptionEnabled"].toLowerCase() === "true";
     }
 }

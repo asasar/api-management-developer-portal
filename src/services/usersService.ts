@@ -2,22 +2,24 @@ import * as Constants from "./../constants";
 import { IAuthenticator } from "../authentication";
 import { MapiClient } from "./mapiClient";
 import { Router } from "@paperbits/common/routing";
-import { HttpHeader } from "@paperbits/common/http";
+import { HttpHeader, HttpClient, HttpMethod } from "@paperbits/common/http";
 import { User } from "../models/user";
 import { Utils } from "../utils";
-import { SignupRequest } from "../contracts/signupRequest";
 import { Identity } from "../contracts/identity";
-import { UserContract } from "../contracts/user";
-
+import { UserContract, } from "../contracts/user";
+import { ISettingsProvider } from "@paperbits/common/configuration";
+import { MapiSignupRequest } from "../contracts/signupRequest";
 
 /**
  * A service for management operations with users.
  */
 export class UsersService {
     constructor(
+        private readonly httpClient: HttpClient,
         private readonly mapiClient: MapiClient,
         private readonly router: Router,
-        private readonly authenticator: IAuthenticator
+        private readonly authenticator: IAuthenticator,
+        private readonly settingsProvider: ISettingsProvider
     ) { }
 
     /**
@@ -26,13 +28,10 @@ export class UsersService {
      * @param password {string} Password.
      */
     public async signIn(username: string, password: string): Promise<string> {
-        const authString = `Basic ${btoa(`${username}:${password}`)}`;
+        const userId = await this.authenticate(username, password);
 
-        const responseData = await this.mapiClient.get<{ id: string }>("identity", [{ name: "Authorization", value: authString }]);
-
-        if (responseData && responseData.id) {
-            this.authenticator.setUser(responseData.id);
-            return responseData.id;
+        if (userId) {
+            return userId;
         }
         else {
             this.authenticator.clearAccessToken();
@@ -40,12 +39,40 @@ export class UsersService {
         }
     }
 
-    /**
-     * Creates sign-up request.
-     * @param signupRequest 
-     */
-    public async createSignupRequest(signupRequest: SignupRequest): Promise<void> {
-        await this.mapiClient.post("/users", null, signupRequest);
+    public async authenticate(username: string, password: string): Promise<string> {
+        const managementApiUrl = await this.settingsProvider.getSetting(Constants.SettingNames.managementApiUrl);
+        const managementApiVersion = await this.settingsProvider.getSetting(Constants.SettingNames.managementApiVersion);
+        const credentials = `Basic ${btoa(`${username}:${password}`)}`;
+
+        try {
+            const response = await this.httpClient.send<Identity>({
+                url: `${managementApiUrl}/identity?api-version=${managementApiVersion}`,
+                method: HttpMethod.get,
+                headers: [{ name: "Authorization", value: credentials }]
+            });
+
+            const identity = response.toObject();
+            const accessTokenHeader = response.headers.find(x => x.name.toLowerCase() === "ocp-apim-sas-token");
+
+            if (accessTokenHeader && accessTokenHeader.value) {
+                const regex = /token=\"(.*)",refresh/gm;
+                const match = regex.exec(accessTokenHeader.value);
+
+                if (!match || match.length < 2) {
+                    throw new Error(`Token format is not valid.`);
+                }
+
+                const accessToken = match[1];
+                this.authenticator.setAccessToken(`SharedAccessSignature ${accessToken}`);
+            }
+
+            if (identity && identity.id) {
+                return identity.id;
+            }
+        }
+        catch (error) {
+            return undefined;
+        }
     }
 
     /**
@@ -56,7 +83,7 @@ export class UsersService {
         this.authenticator.clearAccessToken();
 
         if (withRedirect) {
-            this.router.navigateTo(Constants.signinUrl);
+            this.navigateToSignin();
         }
     }
 
@@ -88,14 +115,8 @@ export class UsersService {
     /**
      * Checks if current user is authenticated.
      */
-    public async isUserSignedIn(): Promise<boolean> {
-        const userId = await this.getCurrentUserId();
-
-        if (userId) {
-            return true;
-        }
-
-        return false;
+    public isUserSignedIn(): boolean {
+        return this.authenticator.isAuthenticated();
     }
 
     /**
@@ -136,13 +157,16 @@ export class UsersService {
                 return new User(user);
             }
             else {
-                console.error("User was not updated with data: " + updateUserData);
+                throw new Error("User was not updated with data: " + updateUserData);
                 return undefined;
             }
-        } catch (error) {
-            this.router.navigateTo(Constants.signinUrl);
+        }
+        catch (error) {
+            this.navigateToSignin();
         }
     }
+
+    
 
     /**
      * Deletes specified user.
@@ -162,64 +186,57 @@ export class UsersService {
             this.signOut();
         }
         catch (error) {
-            this.router.navigateTo(Constants.signinUrl);
-        }
-    }
-
-    /**
-     * Initiates change email request.
-     * TODO: Not implemented.
-     * @param user {User} User.
-     * @param newEmail {string} Email.
-     */
-    public async requestChangeEmail(user: User, newEmail: string): Promise<any> {
-        try {
-            console.log("requestChangeEmail is not implemented");
-        } catch (error) {
-            this.router.navigateTo(Constants.signinUrl);
-        }
-    }
-
-    /**
-     * Initiates password change request.
-     * TODO: Not implemented.
-     * @param user 
-     * @param newPassword 
-     */
-    public async requestChangePassword(user: User, newPassword: string): Promise<any> {
-        try {
-            console.log("requestChangePassword is not implemented");
-        }
-        catch (error) {
-            this.router.navigateTo(Constants.signinUrl);
+            this.navigateToSignin();
         }
     }
 
     public navigateToProfile(): void {
-        this.router.navigateTo(Constants.profileUrl);
+        this.router.navigateTo(Constants.pageUrlProfile);
     }
 
     public navigateToSignin(): void {
-        this.router.navigateTo(Constants.signinUrl);
+        this.router.navigateTo(Constants.pageUrlSignIn);
     }
 
     public navigateToHome(): void {
-        this.router.navigateTo(Constants.homeUrl);
+        this.router.navigateTo(Constants.pageUrlHome);
     }
 
     /**
      * Check whether current user is authenticated and, if not, redirects to sign-in page.
      */
-    public async ensureSignedIn(): Promise<void> {
-        return new Promise<void>((resolve) => {
-            const userId = this.getCurrentUserId();
+    public async ensureSignedIn(): Promise<string> {
+        const userId = await this.getCurrentUserId();
 
-            if (!userId) {
-                this.navigateToSignin();
-                return; // intentionally exiting without resolving the promise.
-            }
+        if (!userId) {
+            this.navigateToSignin();
+            return; // intentionally exiting without resolving the promise.
+        }
 
-            resolve();
-        });
+        return userId;
+    }
+
+    public async createSignupRequest(signupRequest: MapiSignupRequest): Promise<void> {
+        await this.mapiClient.post("/users", null, signupRequest);
+    }
+
+    public async createResetPasswordRequest(email: string): Promise<void> {
+        const payload = {"to": email, "appType": "developerPortal"};
+        await this.mapiClient.post("/confirmations/password", null, payload);
+    }
+
+    public async changePassword(userId: string, newPassword: string): Promise<void> {
+        const authToken = this.authenticator.getAccessToken();
+
+        if (!authToken) {
+            throw Error("Auth token not found");
+        }
+        
+        const headers = [
+            { name: "Authorization", value: authToken },
+            { name: "If-Match", value: "*" }
+        ];
+        const payload = { "password": newPassword };
+        await this.mapiClient.patch(userId, headers, payload);
     }
 }

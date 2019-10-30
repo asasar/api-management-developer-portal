@@ -1,9 +1,18 @@
-<div tabindex="0" role="listbox" class="form-control">
-    <div data-bind="click: toggle, text: selection"></div>
+<div>
+    <div class="form-control" tabindex="0" role="listbox"
+        data-bind="activate: toggle, css: { expanded: expanded }, attr: { 'aria-expanded': expanded }">
+        <div class="input-group">
+            <div class="input" data-bind="text: selection"></div>
+            <div class="input-group-append">
+                <i class="icon icon-chevron-down"></i>
+            </div>
+        </div>
+    </div>
+
     <div class="dropdown" data-bind="visible: expanded">
         <div class="search-input">
             <input type="search" role="searchbox" aria-label="Search" placeholder="Search APIs"
-                data-bind="textInput: pattern" />
+                data-bind="textInput: pattern" autofocus />
             <button type="button" class="search-button">
                 <i class="icon icon-magnifier"></i>
             </button>
@@ -11,19 +20,23 @@
 
         <div role="list">
             <!-- ko if: working -->
-            <spinner class="fit" role="presentation"></spinner>
+            <spinner role="presentation"></spinner>
             <!-- /ko -->
 
             <!-- ko ifnot: working -->
             <!-- ko foreach: { data: apiGroups, as: 'group' } -->
             <div class="collapsible">
                 <div class="tag-group">
-                    <a href="#" class="tag" role="group" data-bind="text: group.tag"></a>
+                    <span class="tag" role="group" data-bind="text: group.tag"></span>
                 </div>
                 <div class="collapsible-container">
                     <!-- ko foreach: { data: group.items, as: 'item' } -->
-                    <a href="#" role="listitem" class="nav-link text-truncate"
-                        data-bind="attr: { href: $component.getReferenceUrl(item) }, text: item.displayName"></a>
+                    <a href="#" role="listitem" class="nav-link text-truncate" data-bind="attr: { href: $component.getReferenceUrl(item) }">
+                        <span data-bind="text: item.displayName"></span>
+                        <!-- ko if: item.apiVersion -->
+                        - <span data-bind="text: item.apiVersion"></span>
+                        <!-- /ko -->
+                    </a>
                     <!-- /ko -->
                 </div>
             </div>

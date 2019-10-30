@@ -8,6 +8,13 @@ export class Request {
     public headers: Parameter[];
     public representations: Representation[];
 
+    /**
+     * Returns "true" if this request is meaningful from documentation prospective.
+     */
+    public isMeaningful(): boolean {
+        return this.representations.some(x => !!x.typeName);
+    }
+
     constructor(contract?: RequestContract) {
         this.queryParameters = [];
         this.headers = [];
@@ -17,11 +24,11 @@ export class Request {
             this.description = contract.description;
 
             this.queryParameters = contract.queryParameters
-                ? contract.queryParameters.map(x => new Parameter(x))
+                ? contract.queryParameters.map(x => new Parameter("query", x))
                 : [];
 
             this.headers = contract.headers
-                ? contract.headers.map(x => new Parameter(x))
+                ? contract.headers.map(x => new Parameter("header", x))
                 : [];
 
             this.representations = contract.representations

@@ -1,7 +1,7 @@
+import { ArmResource } from "./contracts/armResource";
 import { NameValuePair } from "request";
 import { JwtToken } from "./contracts/jwtToken";
 import { js } from "js-beautify";
-import * as moment from "moment";
 
 export class Utils {
     public static getResourceName(resource: string, fullId: string, resultType: string = "name"): string {
@@ -44,6 +44,14 @@ export class Utils {
     public static ensureLeadingSlash(url: string): string {
         if (!url.startsWith("/")) {
             url = "/" + url;
+        }
+
+        return url;
+    }
+
+    public static ensureTrailingSlash(url: string): string {
+        if (!url.endsWith("/")) {
+            url = url + "/";
         }
 
         return url;
@@ -294,20 +302,15 @@ export class Utils {
         return resourceUrl;
     }
 
-    public static armifyContract(contract: any): any {
-        const armifiedContract = {};
+    public static armifyContract(resource: string, contract: any): ArmResource {
+        contract = Utils.clone(contract);
+        contract.displayName = contract.name;
 
-        if (contract.id) {
-            const segments = contract.id.split("/");
-            armifiedContract["id"] = contract.id;
-            armifiedContract["name"] = segments[segments.length - 1];
-        }
-
-        if (contract.name) {
-            contract.displayName = contract.name;
-        }
-
-        armifiedContract["properties"] = contract;
+        const armifiedContract: ArmResource = {
+            id: contract.id,
+            name: this.getResourceName(resource, contract.id, "name"),
+            properties: contract
+        };
 
         delete contract.id;
         delete contract.name;
@@ -323,5 +326,9 @@ export class Utils {
     public static formatDateTime(time: string): string {
         const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
         return new Date(time).toLocaleDateString("en-US", options);
+    }
+
+    public static clone(obj: Object): Object {
+        return JSON.parse(JSON.stringify(obj));
     }
 }

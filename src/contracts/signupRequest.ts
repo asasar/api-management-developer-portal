@@ -1,4 +1,15 @@
+/**
+ * Cotract of user sign up request
+ */
 export interface SignupRequest {
+    solution: string,
+    token: string,
+    type: string,
+    flowId: string,
+    signupData: MapiSignupRequest
+}
+
+export interface MapiSignupRequest{
     email: string;
     firstName: string;
     lastName: string;

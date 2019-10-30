@@ -1,7 +1,7 @@
+import * as Constants from "./constants";
 import { UnsavedChangesRouteGuard } from "./routing/unsavedChangesRouteGuard";
 import { MapiObjectStorage } from "./persistence/mapiObjectStorage";
 import { DefaultAuthenticator } from "./components/defaultAuthenticator";
-import { AccessTokenRouteGuard } from "./routing/accessTokenRouteGuard";
 import { IInjector, IInjectorModule } from "@paperbits/common/injection";
 import { ListOfApisModule } from "./components/apis/list-of-apis/ko/listOfApis.module";
 import { ListOfApisEditorModule } from "./components/apis/list-of-apis/ko/listOfApisEditor.module";
@@ -21,10 +21,10 @@ import { UserSubscriptionsModule } from "./components/users/user-subscriptions/k
 import { UserSubscriptionsEditorModule } from "./components/users/user-subscriptions/ko/userSubscriptionsEditor.module";
 import { ProductDetailsModule } from "./components/products/product-details/ko/productDetails.module";
 import { ProductDetailsEditorModule } from "./components/products/product-details/ko/productDetailsEditor.module";
-import { MapiClient, UserService, IdentityService } from "./services";
+import { MapiClient, IdentityService } from "./services";
 import { AzureBlobStorage } from "@paperbits/azure";
 import { SetupModule } from "./components/setup/setup.module";
-import { PublishingModule } from "./components/publishing";
+import { ContentModule } from "./components/content";
 import { SaveChangesToolButton } from "./persistence/saveChangesToolbutton";
 import { OperationListModule } from "./components/operations/operation-list/ko/operationList.module";
 import { OperationListEditorModule } from "./components/operations/operation-list/ko/operationListEditor.module";
@@ -41,7 +41,19 @@ import { ProductSubscriptionsModule } from "./components/products/product-subscr
 import { App } from "./components/app/app";
 import { ReportsModule } from "./components/reports/ko/reports.module";
 import { ReportsEditorModule } from "./components/reports/ko/reportsEditor.module";
+import { ResetPasswordModule } from "./components/users/reset-password/ko/resetPassword.module";
+import { ResetPasswordEditorModule } from "./components/users/reset-password/ko/resetPasswordEditor.module";
+import { ConfirmPasswordModule } from "./components/users/confirm-password/ko/confirmPassword.module";
+import { ConfirmPasswordEditorModule } from "./components/users/confirm-password/ko/confirmPasswordEditor.module";
 import { HelpModule } from "./components/help";
+import { ChangePasswordModule } from "./components/users/change-password/ko/changePassword.module";
+import { ChangePasswordEditorModule } from "./components/users/change-password/ko/changePasswordEditor.module";
+import { TenantService } from "./services/tenantService";
+import { ValidationSummaryModule } from "./components/users/validation-summary/ko/validationSummary.module";
+import { ValidationSummaryEditorModule} from "./components/users/validation-summary/ko/validationSummaryEditor.module"
+import { BackendService } from "./services/backendService";
+import { StaticRoleService } from "./services/roleService";
+import { ProvisionService } from "./services/provisioningService";
 
 
 export class ApimDesignModule implements IInjectorModule {
@@ -73,23 +85,35 @@ export class ApimDesignModule implements IInjectorModule {
         injector.bindModule(new ProductDetailsEditorModule());
         injector.bindModule(new ProductSubscribeModule());
         injector.bindModule(new ProductSubscribeEditorModule());
-        injector.bindModule(new PublishingModule());
+        injector.bindModule(new ContentModule());
         injector.bindModule(new OperationListModule());
         injector.bindModule(new OperationListEditorModule());
         injector.bindModule(new OperationDetailsModule());
         injector.bindModule(new OperationDetailsEditorModule());
         injector.bindModule(new ReportsModule());
         injector.bindModule(new ReportsEditorModule());
+        injector.bindModule(new ResetPasswordModule());
+        injector.bindModule(new ResetPasswordEditorModule());
+        injector.bindModule(new ConfirmPasswordModule());
+        injector.bindModule(new ConfirmPasswordEditorModule());
+        injector.bindModule(new ChangePasswordModule());
+        injector.bindModule(new ChangePasswordEditorModule());
         injector.bindModule(new HelpModule());
+        injector.bindModule(new ValidationSummaryEditorModule());
+        injector.bindModule(new ValidationSummaryModule());
         injector.bindSingleton("app", App);
         injector.bindSingleton("blobStorage", AzureBlobStorage);
-        injector.bindSingleton("userService", UserService);
+        injector.bindSingleton("tenantService", TenantService);        
+        injector.bindSingleton("backendService", BackendService);
+        injector.bindSingleton("roleService", StaticRoleService);
+        injector.bindSingleton("tenantService", TenantService);
+        injector.bindSingleton("provisioningService", ProvisionService);
         injector.bindSingleton("identityService", IdentityService);
         injector.bindSingleton("mapiClient", MapiClient);
         injector.bindSingleton("authenticator", DefaultAuthenticator);
         injector.bindSingleton("objectStorage", MapiObjectStorage);
         injector.bindToCollection("routeGuards", UnsavedChangesRouteGuard);
-        injector.bindToCollection("routeGuards", AccessTokenRouteGuard);
         injector.bindToCollection("trayCommands", SaveChangesToolButton);
+        injector.bindInstance("reservedPermalinks", Constants.reservedPermalinks);       
     }
 }

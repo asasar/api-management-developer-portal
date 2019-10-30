@@ -1,1 +1,7 @@
-<product-list-runtime></product-list-runtime>
+<!-- ko if: layout() === 'list' -->
+<product-list-runtime data-bind="attr: { params: runtimeConfig }"></product-list-runtime>
+<!-- /ko -->
+
+<!-- ko if: layout() === 'dropdown' -->
+<product-list-dropdown-runtime data-bind="attr: { params: runtimeConfig }"></product-list-dropdown-runtime>
+<!-- /ko -->

@@ -20,6 +20,7 @@ import { HttpHeader } from "@paperbits/common/http/httpHeader";
 import { ChangeLogContract } from "../contracts/apiChangeLog";
 import { TagGroup } from "../models/tagGroup";
 import { Bag } from "@paperbits/common";
+import { Tag } from "../models/tag";
 
 
 export class ApiService {
@@ -61,17 +62,77 @@ export class ApiService {
      * Returns APIs in specified version set.
      * @param versionSetId Unique version set identifier.
      */
-    public async getVersionSetApis(versionSetId: string): Promise<Api[]> {
+    public async getApisInVersionSet(versionSetId: string): Promise<Api[]> {
         if (!versionSetId) {
             return null;
         }
+
         const query = "/apis?expandApiVersionSet=true";
-
         const apisPage = await this.mapiClient.get<Page<ApiContract>>(query);
-
         const result = apisPage.value.filter(x => x.properties.apiVersionSetId && Utils.getResourceName("api-version-sets", x.properties.apiVersionSetId, "shortId") === versionSetId).map(x => new Api(x));
 
         return result;
+    }
+
+    /**
+     * Returns Tag/Operation pairs matching search request (if specified).
+     * @param searchRequest Search request definition.
+     */
+    public async getOperationsByTags(apiId: string, searchQuery?: SearchQuery): Promise<Page<TagGroup<Operation>>> {
+        if (!apiId) {
+            throw new Error(`Parameter "apiId" not specified.`);
+        }
+
+        const skip = searchQuery && searchQuery.skip || 0;
+        const take = searchQuery && searchQuery.take || Constants.defaultPageSize;
+
+        let query = `apis/${apiId}/operationsByTags?includeNotTaggedOperations=true&$top=${take}&$skip=${skip}`;
+        const odataFilterEntries = [];
+
+        if (searchQuery) {
+            if (searchQuery.tags && searchQuery.tags.length > 0) {
+                const tagFilterEntries = searchQuery.tags.map((tag) => `tag/name eq '${tag}'`);
+                odataFilterEntries.push(`(${tagFilterEntries.join(" or ")})`);
+            }
+
+            if (searchQuery.pattern) {
+                const pattern = Utils.escapeValueForODataFilter(searchQuery.pattern);
+                odataFilterEntries.push(`(contains(operation/name,'${encodeURIComponent(pattern)}'))`);
+            }
+        }
+
+        if (odataFilterEntries.length > 0) {
+            query = Utils.addQueryParameter(query, `$filter=` + odataFilterEntries.join(" and "));
+        }
+        const pagesOfOperationsByTag = await this.mapiClient.get<PageContract<ApiTagResourceContract>>(query);
+        const page = new Page<TagGroup<Operation>>();
+        const tagGroups: Bag<TagGroup<Operation>> = {};
+
+        pagesOfOperationsByTag.value.forEach(x => {
+            const tagContract: TagContract = x.tag ? Utils.armifyContract("tags", x.tag) : null;
+            const operationContract: OperationContract = x.operation ? Utils.armifyContract("operations", x.operation) : null;
+
+            let tagGroup: TagGroup<Operation>;
+            let tagName: string;
+
+            if (tagContract) {
+                tagName = tagContract.properties.displayName;
+            } else {
+                tagName = "Not tagged";
+            }
+            tagGroup = tagGroups[tagName];
+
+            if (!tagGroup) {
+                tagGroup = new TagGroup<Operation>();
+                tagGroup.tag = tagName;
+                tagGroups[tagName] = tagGroup;
+            }
+            tagGroup.items.push(new Operation(operationContract));
+        });
+        page.value = Object.keys(tagGroups).map(x => tagGroups[x]);
+        page.nextLink = pagesOfOperationsByTag.nextLink;
+
+        return page;
     }
 
     /**
@@ -107,9 +168,9 @@ export class ApiService {
         const page = new Page<TagGroup<Api>>();
         const tagGroups: Bag<TagGroup<Api>> = {};
 
-        pageOfApiTagResources.value.forEach(x => {
-            const tagContract: TagContract = x.tag ? Utils.armifyContract(x.tag) : null;
-            const apiContract: ApiContract = x.api ? Utils.armifyContract(x.api) : null;
+        pageOfApiTagResources.value.forEach((x) => {
+            const tagContract: TagContract = x.tag ? Utils.armifyContract("tags", x.tag) : null;
+            const apiContract: ApiContract = x.api ? Utils.armifyContract("apis", x.api) : null;
 
             let tagGroup: TagGroup<Api>;
             let tagName: string;
@@ -137,12 +198,25 @@ export class ApiService {
         return page;
     }
 
+    public async getOperationTags(operationId: string): Promise<Tag[]> {
+        if (!operationId) {
+            throw new Error(`Parameter "operationId" not specified.`);
+        }
+
+        const result = await this.mapiClient.get<Page<TagContract>>(`${operationId}/tags`);
+        return result.value.map(contract => new Tag(contract));
+    }
+
     /**
      * Returns API with specified ID and revision.
      * @param apiId Unique API indentifier.
      * @param revision 
      */
     public async getApi(apiId: string, revision?: string): Promise<Api> {
+        if (!apiId) {
+            throw new Error(`Parameter "apiId" not specified.`);
+        }
+
         let apiResourceUri = apiId;
 
         if (revision) {
@@ -157,17 +231,25 @@ export class ApiService {
             return null;
         }
 
-        const api = new Api(apiContract);
-
-        if (apiContract.properties.apiVersionSetId && !api.apiVersionSet) {
+        if (apiContract.properties.apiVersionSetId && !apiContract.properties.apiVersionSet) { // Filling the missing version set
             const setId = Utils.getResourceName("api-version-sets", apiContract.properties.apiVersionSetId, "shortId");
-            api.apiVersionSet = await this.getApiVersionSet(setId);
+            const apiVersionSetContract = await this.getApiVersionSet(setId);
+            apiContract.properties.apiVersionSet = apiVersionSetContract;
         }
 
-        return api;
+        return new Api(apiContract);
     }
 
-    public exportApi(apiId: string, format: string): Promise<string> {
+    /**
+     * Returns a document of exported API in specified format.
+     * @param apiId {string} Unique identifier.
+     * @param format {string} Export format.
+     */
+    public exportApi(apiId: string, format: string): Promise<any> {
+        if (!apiId) {
+            throw new Error(`Parameter "apiId" not specified.`);
+        }
+
         const header: HttpHeader = {
             name: "Accept",
             value: "application/vnd.swagger.doc+json"
@@ -201,6 +283,10 @@ export class ApiService {
      * @returns all changelog pages
      */
     public async getApiChangeLog(apiId: string, skip: number): Promise<Page<ChangeLogContract>> {
+        if (!apiId) {
+            throw new Error(`Parameter "apiId" not specified.`);
+        }
+
         let apiResourceUri = apiId;
         const take = Constants.defaultPageSize;
         apiResourceUri += `/releases?$top=${take}&$skip=${skip}`;
@@ -219,6 +305,10 @@ export class ApiService {
     }
 
     public async getOperation(operationId: string): Promise<Operation> {
+        if (!operationId) {
+            throw new Error(`Parameter "operationId" not specified.`);
+        }
+
         const operationContract = await this.mapiClient.get<OperationContract>(operationId);
 
         if (!operationContract) {
@@ -231,6 +321,10 @@ export class ApiService {
     }
 
     public async getOperations(apiId: string, searchQuery?: SearchQuery): Promise<Page<Operation>> {
+        if (!apiId) {
+            throw new Error(`Parameter "apiId" not specified.`);
+        }
+
         let query = `${apiId}/operations`;
 
         let top;
@@ -242,16 +336,15 @@ export class ApiService {
 
             if (searchQuery.pattern) {
                 const pattern = Utils.escapeValueForODataFilter(searchQuery.pattern);
-                query = Utils.addQueryParameter(query, `$filter=contains(properties/name,'${encodeURIComponent(pattern)}')`);
+                query = Utils.addQueryParameter(query, `$filter=contains(properties/displayName,'${encodeURIComponent(pattern)}')`);
             }
 
-            top = searchQuery.take;
+            top = searchQuery && searchQuery.take || Constants.defaultPageSize;
 
             if (searchQuery.skip) {
                 query = Utils.addQueryParameter(query, `$skip=${searchQuery.skip}`);
             }
         }
-
         query = Utils.addQueryParameter(query, `$top=${top || 20}`);
 
         const result = await this.mapiClient.get<Page<OperationContract>>(query);
@@ -268,6 +361,7 @@ export class ApiService {
     public async getApiSchema(schemaId: string): Promise<Schema> {
         const apiId = schemaId.split("/schemas").shift();
         let cachedApi = this.lastApiSchemas[apiId];
+
         if (!cachedApi) {
             // clean cache if apiId changed
             if (Object.keys(this.lastApiSchemas).length > 0) {
@@ -308,7 +402,12 @@ export class ApiService {
     private lastApiProducts = {};
 
     public async getAllApiProducts(apiId: string): Promise<Page<Product>> {
+        if (!apiId) {
+            throw new Error(`Parameter "apiId" not specified.`);
+        }
+
         let cachedApi = this.lastApiProducts[apiId];
+
         if (!cachedApi) {
             // clean cache if apiId changed
             if (Object.keys(this.lastApiProducts).length > 0) {
@@ -334,18 +433,25 @@ export class ApiService {
         return page;
     }
 
-    public async getProductApis(productId: string): Promise<Page<Api>> {
-        const result: Api[] = [];
+    public async getProductApis(productId: string, searchQuery: SearchQuery): Promise<Page<Api>> {
+        let query = `${productId}/apis`;
 
-        const pageOfApis = await this.mapiClient.get<Page<ApiContract>>(`${productId}/apis`);
-
-        if (pageOfApis && pageOfApis.value) {
-            pageOfApis.value.map(item => result.push(new Api(item)));
+        if (searchQuery.pattern) {
+            const pattern = Utils.escapeValueForODataFilter(searchQuery.pattern);
+            query = Utils.addQueryParameter(query, `$filter=contains(properties/displayName,'${encodeURIComponent(pattern)}')`);
         }
 
+        if (searchQuery.skip) {
+            query = Utils.addQueryParameter(query, `$skip=${searchQuery.skip}`);
+        }
+
+        query = Utils.addQueryParameter(query, `$top=${searchQuery.take}`);
+
+        const result = await this.mapiClient.get<Page<ApiContract>>(query);
         const page = new Page<Api>();
-        page.value = result;
-        page.count = pageOfApis.count;
+
+        page.value = result.value.map(item => new Api(item));
+        page.nextLink = result.nextLink;
 
         return page;
     }

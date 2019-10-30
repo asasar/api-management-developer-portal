@@ -1,11 +1,14 @@
 import * as ko from "knockout";
+import * as Constants from "../../../../../constants";
 import template from "./operation-list.html";
-import { Component, RuntimeComponent, OnMounted } from "@paperbits/common/ko/decorators";
+import { Router } from "@paperbits/common/routing";
+import { Component, RuntimeComponent, OnMounted, OnDestroyed, Param } from "@paperbits/common/ko/decorators";
 import { ApiService } from "../../../../../services/apiService";
-import { DefaultRouter, Route } from "@paperbits/common/routing";
 import { Operation } from "../../../../../models/operation";
-import { Page } from "../../../../../models/page";
 import { SearchQuery } from "../../../../../contracts/searchQuery";
+import { TagGroup } from "../../../../../models/tagGroup";
+import { RouteHelper } from "../../../../../routing/routeHelper";
+
 
 @RuntimeComponent({ selector: "operation-list" })
 @Component({
@@ -15,152 +18,201 @@ import { SearchQuery } from "../../../../../contracts/searchQuery";
 })
 export class OperationList {
     private searchRequest: SearchQuery;
-    private currentApiId: string;
-    private currentUrl: string;
-    private queryParams: URLSearchParams;
 
-    public operations: ko.ObservableArray<Operation>;
-    public working: ko.Observable<boolean>;
-    public selectedId: ko.Observable<string>;
-    public lastPage: ko.Observable<Page<Operation>>;
+    public readonly selectedApiName: ko.Observable<string>;
+    public readonly selectedOperationName: ko.Observable<string>;
+    public readonly operations: ko.ObservableArray<Operation>;
+    public readonly working: ko.Observable<boolean>;
+    public readonly groupByTag: ko.Observable<boolean>;
+    public readonly operationGroups: ko.ObservableArray<TagGroup<Operation>>;
+    public readonly pattern: ko.Observable<string>;
+    public readonly pageNumber: ko.Observable<number>;
+    public readonly hasPrevPage: ko.Observable<boolean>;
+    public readonly hasNextPage: ko.Observable<boolean>;
+    public readonly hasPager: ko.Computed<boolean>;
 
     constructor(
         private readonly apiService: ApiService,
-        private readonly router: DefaultRouter
+        private readonly router: Router,
+        private readonly routeHelper: RouteHelper
     ) {
-        this.operations = ko.observableArray([]);
-        this.working = ko.observable();
-        this.selectedId = ko.observable();
-        this.lastPage = ko.observable();
-        this.loadOperations = this.loadOperations.bind(this);
-
-        this.router.addRouteChangeListener(this.loadOperations);
+        this.detailsPageUrl = ko.observable();
+        this.allowSelection = ko.observable(false);
+        this.operations = ko.observableArray();
+        this.operationGroups = ko.observableArray();
+        this.selectedApiName = ko.observable();
+        this.selectedOperationName = ko.observable().extend(<any>{ acceptChange: this.allowSelection });
+        this.working = ko.observable(false);
+        this.groupByTag = ko.observable(false);
+        this.pattern = ko.observable();
+        this.pageNumber = ko.observable(1);
+        this.hasNextPage = ko.observable();
+        this.hasPrevPage = ko.observable();
+        this.hasPager = ko.computed(() => this.hasPrevPage() || this.hasNextPage());
     }
+
+    @Param()
+    public allowSelection: ko.Observable<boolean>;
+
+    @Param()
+    public detailsPageUrl: ko.Observable<string>;
 
     @OnMounted()
     public async initialize(): Promise<void> {
-        const route = this.router.getCurrentRoute();
+        const apiName = this.routeHelper.getApiName();
+        const operationName = this.routeHelper.getOperationName();
 
-        this.loadOperations(route);
+        this.selectedApiName(apiName);
+        this.selectedOperationName(operationName);
+
+        if (!this.selectedApiName()) {
+            return;
+        }
+
+        await this.loadOperations();
+
+        this.pattern
+            .extend({ rateLimit: { timeout: Constants.defaultInputDelayMs, method: "notifyWhenChangesStop" } })
+            .subscribe(this.resetSearch);
+
+        this.groupByTag
+            .subscribe(this.loadOperations);
+
+        this.router.addRouteChangeListener(this.onRouteChange);
     }
 
-    public async loadOperations(route?: Route): Promise<void> {
-        if (!route || !route.hash) {
-            return;
-        }
-        const currentUrl = route.url;
-        const currentHash = route.hash;
+    private async onRouteChange(): Promise<void> {
+        const apiName = this.routeHelper.getApiName();
+        const operationName = this.routeHelper.getOperationName();
 
-        if (currentUrl === this.currentUrl && this.operations().length > 0) {
-            return;
-        }
-
-        this.currentUrl = currentUrl;
-
-        this.queryParams = new URLSearchParams(currentHash);
-        if (!this.queryParams.has("apiId")) {
+        if (apiName !== this.selectedApiName()) {
+            this.selectedApiName(apiName);
+            this.selectedOperationName(null);
+            await this.resetSearch();
             return;
         }
 
-        if (this.queryParams.has("operationId")) {
-            const selectedOperationId = this.queryParams.get("operationId");
-            this.selectedId(selectedOperationId);
+        if (operationName !== this.selectedOperationName()) {
+            this.selectedOperationName(operationName);
         }
-
-        const apiId = this.queryParams.get("apiId");
-        if (apiId === "undefined" || apiId === "null") {
-            return;
-        }
-
-        if (this.currentApiId === apiId) {
-            return;
-        }
-
-        this.currentApiId = apiId;
-        this.operations([]);
-        this.searchRequest = { pattern: "", tags: [], grouping: "none" };
-        await this.searchOperations();
-        this.selectFirst();
     }
 
-    public async searchOperations(searchRequest?: SearchQuery): Promise<void> {
-        this.working(true);
-
-        this.searchRequest = searchRequest || this.searchRequest;
+    public async loadOperations(): Promise<void> {
+        if (this.groupByTag()) {
+            this.operationGroups([]);
+            this.searchRequest = { pattern: this.pattern(), tags: [], grouping: "tag" };
+        }
+        else {
+            this.operations([]);
+            this.searchRequest = { pattern: this.pattern(), tags: [], grouping: "none" };
+        }
 
         try {
-            switch (this.searchRequest.grouping) {
-                case "none":
-                    await this.load();
-                    break;
+            this.working(true);
 
-                case "tag":
-                    break;
+            if (this.groupByTag()) {
+                await this.loadOfOperationsByTag();
+            }
+            else {
+                await this.loadPageOfOperations();
+            }
 
-                default:
-                    throw new Error("Unexpected groupBy value");
+            if (this.allowSelection() && !this.selectedOperationName()) {
+                this.selectFirstOperation();
             }
         }
         catch (error) {
-            console.error("operation-list error: ", error);
+            throw new Error(`Unable to load operations: Error: ${error.message}`);
         }
         finally {
             this.working(false);
         }
     }
 
-    private async load(): Promise<void> {
-        const pageOfOperations = await this.apiService.getOperations(`apis/${this.currentApiId}`, this.searchRequest);
-        
-        this.lastPage(pageOfOperations);
-        const current = this.operations();
+    private async loadOfOperationsByTag(): Promise<void> {
+        this.searchRequest.skip = (this.pageNumber() - 1) * Constants.defaultPageSize;
 
+        const pageOfOperationsByTag = await this.apiService.getOperationsByTags(this.selectedApiName(), this.searchRequest);
+        const operationGroups = pageOfOperationsByTag.value;
 
-        if (current && current.length > 0) {
-            this.operations.push(...pageOfOperations.value);
-        } else {
-            this.operations(pageOfOperations.value);
-        }
+        this.operationGroups(operationGroups);
+
+        this.hasPrevPage(this.pageNumber() > 1);
+        this.hasNextPage(!!pageOfOperationsByTag.nextLink);
     }
 
-    public async loadMore(): Promise<void> {
-        const page = this.lastPage();
-        if (page.nextLink) {
-            this.searchRequest.skip = page.getSkip();
-            if (this.searchRequest.skip) {
-                await this.load();
+    private async loadPageOfOperations(): Promise<void> {
+        this.searchRequest.skip = (this.pageNumber() - 1) * Constants.defaultPageSize;
+        const pageOfOperations = await this.apiService.getOperations(`apis/${this.selectedApiName()}`, this.searchRequest);
+
+        this.operations(pageOfOperations.value);
+
+        this.hasPrevPage(this.pageNumber() > 1);
+        this.hasNextPage(!!pageOfOperations.nextLink);
+    }
+
+    private selectFirstOperation(): void {
+        let operationName;
+
+        if (this.groupByTag()) {
+            const groups = this.operationGroups();
+
+            if (groups.length < 1 || groups[0].items.length < 1) {
+                return;
             }
+
+            operationName = groups[0].items[0].name;
         }
-    }
+        else {
+            const operations = this.operations();
 
-    public selectOperation(operation: Operation): void {
-        if (!operation) {
-            return;
-        }
-        const parts = operation.id.split("/operations/");
-        const apiId = parts[0].split("/apis/").pop();
-        const operationId = parts[1];
-
-        const params = new URLSearchParams();
-        params.append("apiId", apiId);
-        operationId && params.append("operationId", operationId);
-
-        this.router.navigateTo("#?" + params.toString());
-    }
-
-    private selectFirst(): void {
-        if (!this.queryParams.has("operationId")) {
-            const list = this.operations();
-            if (list.length > 0) {
-                const selectId = list[0].shortId;
-                this.selectedId(selectId);
-                this.queryParams.set("operationId", selectId);
-                this.router.navigateTo("#?" + this.queryParams.toString());
+            if (operations.length < 1) {
+                return;
             }
+
+            operationName = operations[0].name;
+        }
+
+        this.selectedOperationName(operationName);
+
+        const operationUrl = this.routeHelper.getOperationReferenceUrl(this.selectedApiName(), operationName, this.detailsPageUrl());
+        this.router.navigateTo(operationUrl);
+    }
+
+    public getReferenceUrl(operation: Operation): string {
+        const apiName = this.routeHelper.getApiName();
+        return this.routeHelper.getOperationReferenceUrl(apiName, operation.name, this.detailsPageUrl());
+    }
+
+    public async resetSearch(): Promise<void> {
+        this.pageNumber(1);
+        this.loadOperations();
+    }
+
+    public prevPage(): void {
+        this.pageNumber(this.pageNumber() - 1);
+
+        if (this.groupByTag()) {
+            this.loadOfOperationsByTag();
+        }
+        else {
+            this.loadPageOfOperations();
         }
     }
 
+    public nextPage(): void {
+        this.pageNumber(this.pageNumber() + 1);
+
+        if (this.groupByTag()) {
+            this.loadOfOperationsByTag();
+        }
+        else {
+            this.loadPageOfOperations();
+        }
+    }
+
+    @OnDestroyed()
     public dispose(): void {
-        this.router.removeRouteChangeListener(this.loadOperations);
+        this.router.removeRouteChangeListener(this.onRouteChange);
     }
 }

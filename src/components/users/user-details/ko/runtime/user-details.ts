@@ -4,6 +4,12 @@ import template from "./user-details.html";
 import { Component, RuntimeComponent, OnMounted } from "@paperbits/common/ko/decorators";
 import { User } from "../../../../../models/user";
 import { UsersService } from "../../../../../services/usersService";
+import { DelegationParameters, DelegationAction } from "../../../../../contracts/tenantSettings";
+import { TenantService } from "../../../../../services/tenantService";
+import { BackendService } from "../../../../../services/backendService";
+import { Router } from "@paperbits/common/routing/router";
+import { pageUrlChangePassword } from "../../../../../constants";
+import { Utils } from "../../../../../utils";
 
 @RuntimeComponent({ selector: "user-details" })
 @Component({
@@ -17,13 +23,16 @@ export class UserDetails {
     public email: ko.Observable<string>;
     public registrationDate: ko.Computed<string>;
     public isEdit: ko.Observable<boolean>;
-    public isEditEmail: ko.Observable<boolean>;
-    public isEditPassword: ko.Observable<boolean>;
+    public working: ko.Observable<boolean>;
     public password: ko.Observable<string>;
     public confirmPassword: ko.Observable<string>;
     public user: ko.Observable<User>;
 
-    constructor(private readonly usersService: UsersService) {
+    constructor(
+        private readonly usersService: UsersService, 
+        private readonly tenantService: TenantService,
+        private readonly backendService: BackendService,
+        private readonly router: Router) {
         this.user = ko.observable();
         this.firstName = ko.observable();
         this.lastName = ko.observable();
@@ -31,8 +40,7 @@ export class UserDetails {
         this.password = ko.observable();
         this.confirmPassword = ko.observable();
         this.isEdit = ko.observable(false);
-        this.isEditEmail = ko.observable(false);
-        this.isEditPassword = ko.observable(false);
+        this.working = ko.observable(false);
         this.registrationDate = ko.computed(() => this.getRegistrationDate());
     }
 
@@ -43,6 +51,22 @@ export class UserDetails {
         const model: User = await this.usersService.getCurrentUser();
 
         this.setUser(model);
+    }
+
+    private async isDelegation(action: DelegationAction): Promise<void> {
+        if (!this.user()) {
+            return;
+        }
+        const isDelegationEnabled = await this.tenantService.isDelegationEnabled();
+        if (isDelegationEnabled) {
+            const delegationParam = {};
+            delegationParam[DelegationParameters.UserId] =  Utils.getResourceName("users", this.user().id);
+
+            const delegationUrl = await this.backendService.getDelegationUrl(action, delegationParam);
+            if (delegationUrl) {
+                window.open(delegationUrl, "_self");
+            }
+        }
     }
 
     private setUser(model: User): any {
@@ -56,62 +80,39 @@ export class UserDetails {
         this.email = ko.observable(model.email);
     }
 
-    public toggleEdit(): void {
+    public async toggleEdit(): Promise<void> {
         if (this.isEdit()) {
             this.firstName(this.user().firstName);
             this.lastName(this.user().lastName);
+        } else {            
+            await this.isDelegation(DelegationAction.changeProfile);
         }
         this.isEdit(!this.isEdit());
     }
 
-    public toggleEditEmail(): void {
-        if (this.isEditEmail()) {
-            this.email(this.user().email);
-        }
-        this.isEditEmail(!this.isEditEmail());
-    }
-
-    public toggleEditPassword(): void {
-        if (this.isEditPassword()) {
-            this.password(undefined);
-            this.confirmPassword(undefined);
-        }
-        this.isEditPassword(!this.isEditPassword());
-    }
-
-    public changeEmail(): void {
-        if (this.isEditEmail() && this.isEmailChanged()) {
-            this.usersService.requestChangeEmail(this.user(), this.email());
-        }
-        this.toggleEditEmail();
-    }
-
-    public changePassword(): void {
-        if (this.isEditPassword() && this.password() && this.password() === this.confirmPassword()) {
-            this.usersService.requestChangePassword(this.user(), this.password());
-        }
-        this.toggleEditPassword();
+    public async toggleEditPassword(): Promise<void> {
+        await this.isDelegation(DelegationAction.changePassword);
+        await this.router.navigateTo(pageUrlChangePassword);
     }
 
     public async changeAccountInfo(): Promise<void> {
         if (this.isEdit()) {
+            this.working(true);
             const updateData = {
                 firstName: this.firstName(),
                 lastName: this.lastName()
             };
 
             const user = await this.usersService.updateUser(this.user().id, updateData);
-
+            this.working(false);
             this.setUser(user);
             this.toggleEdit();
         }
     }
 
     public async closeAccount(): Promise<void> {
-        const confirmed = window.confirm(`Dear ${this.user().firstName} ${this.user().lastName},
-You are about to close your account associated with email address
-${this.user().email}.
-You will not be able to sign in to or restore your closed account. Are you sure you want to close your account?`);
+        await this.isDelegation(DelegationAction.closeAccount);
+        const confirmed = window.confirm(`Dear ${this.user().firstName} ${this.user().lastName}, \nYou are about to close your account associated with email address ${this.user().email}.\nYou will not be able to sign in to or restore your closed account. Are you sure you want to close your account?`);
 
         if (confirmed) {
             await this.usersService.deleteUser(this.user().id);
