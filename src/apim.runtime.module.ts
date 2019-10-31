@@ -42,7 +42,7 @@ import { UserSubscriptions } from "./components/users/user-subscriptions/ko/runt
 import { ProductList } from "./components/products/product-list/ko/runtime/product-list";
 import { ProductDetails } from "./components/products/product-details/ko/runtime/product-details";
 import { ProductSubscribe } from "./components/products/product-subscribe/ko/runtime/product-subscribe";
-import { DefaultAuthenticator } from "./components/defaultAuthenticator";
+import { SsoAuthenticator } from "./components/ssoAuthenticator";
 import { Spinner } from "./components/spinner/spinner";
 import { ProductApis } from "./components/products/product-apis/ko/runtime/product-apis";
 import { OperationList } from "./components/operations/operation-list/ko/runtime/operation-list";
@@ -116,7 +116,7 @@ export class ApimRuntimeModule implements IInjectorModule {
         injector.bindSingleton("mapiClient", MapiClient);
         injector.bindSingleton("httpClient", XmlHttpRequestClient);
         injector.bindSingleton("settingsProvider", SettingsProvider);
-        injector.bindSingleton("authenticator", DefaultAuthenticator);
+        injector.bindSingleton("authenticator", SsoAuthenticator);
         injector.bindSingleton("routeHelper", RouteHelper);
         injector.bindSingleton("userService", StaticUserService);
         injector.bindSingleton("provisioningService", ProvisionService);

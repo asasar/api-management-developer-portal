@@ -1,7 +1,7 @@
 import * as Constants from "./constants";
 import { UnsavedChangesRouteGuard } from "./routing/unsavedChangesRouteGuard";
 import { MapiObjectStorage } from "./persistence/mapiObjectStorage";
-import { DefaultAuthenticator } from "./components/defaultAuthenticator";
+import { SsoAuthenticator } from "./components/ssoAuthenticator";
 import { IInjector, IInjectorModule } from "@paperbits/common/injection";
 import { ListOfApisModule } from "./components/apis/list-of-apis/ko/listOfApis.module";
 import { ListOfApisEditorModule } from "./components/apis/list-of-apis/ko/listOfApisEditor.module";
@@ -50,7 +50,7 @@ import { ChangePasswordModule } from "./components/users/change-password/ko/chan
 import { ChangePasswordEditorModule } from "./components/users/change-password/ko/changePasswordEditor.module";
 import { TenantService } from "./services/tenantService";
 import { ValidationSummaryModule } from "./components/users/validation-summary/ko/validationSummary.module";
-import { ValidationSummaryEditorModule} from "./components/users/validation-summary/ko/validationSummaryEditor.module"
+import { ValidationSummaryEditorModule } from "./components/users/validation-summary/ko/validationSummaryEditor.module"
 import { BackendService } from "./services/backendService";
 import { StaticRoleService } from "./services/roleService";
 import { ProvisionService } from "./services/provisioningService";
@@ -103,14 +103,14 @@ export class ApimDesignModule implements IInjectorModule {
         injector.bindModule(new ValidationSummaryModule());
         injector.bindSingleton("app", App);
         injector.bindSingleton("blobStorage", AzureBlobStorage);
-        injector.bindSingleton("tenantService", TenantService);        
+        injector.bindSingleton("tenantService", TenantService);
         injector.bindSingleton("backendService", BackendService);
         injector.bindSingleton("roleService", StaticRoleService);
         injector.bindSingleton("tenantService", TenantService);
         injector.bindSingleton("provisioningService", ProvisionService);
         injector.bindSingleton("identityService", IdentityService);
         injector.bindSingleton("mapiClient", MapiClient);
-        injector.bindSingleton("authenticator", DefaultAuthenticator);
+        injector.bindSingleton("authenticator", SsoAuthenticator);
         injector.bindSingleton("objectStorage", MapiObjectStorage);
         injector.bindToCollection("routeGuards", UnsavedChangesRouteGuard);
         injector.bindToCollection("trayCommands", SaveChangesToolButton);
