@@ -3,7 +3,7 @@ import { Logger } from "@paperbits/common/logging";
 import { AppInsights } from "applicationinsights-js";
 
 
-export class LogService implements Logger {
+export class AppInsightsLogger implements Logger {
     constructor(private readonly instrumentationKey: string) {
         if (this.instrumentationKey && location.hostname.endsWith(".net")) {
             AppInsights.downloadAndSetup({ instrumentationKey: this.instrumentationKey });

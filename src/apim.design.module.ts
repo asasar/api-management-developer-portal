@@ -3,7 +3,7 @@ import { UnsavedChangesRouteGuard } from "./routing/unsavedChangesRouteGuard";
 import { MapiObjectStorage } from "./persistence/mapiObjectStorage";
 import { SsoAuthenticator } from "./components/ssoAuthenticator";
 import { IInjector, IInjectorModule } from "@paperbits/common/injection";
-import { ConsoleLogger } from "@paperbits/common/logging";
+import { AppInsightsLogger } from "./logging/appInsightsLogger";
 import { ListOfApisModule } from "./components/apis/list-of-apis/ko/listOfApis.module";
 import { ListOfApisEditorModule } from "./components/apis/list-of-apis/ko/listOfApisEditor.module";
 import { DetailsOfApiModule } from "./components/apis/details-of-api/ko/detailsOfApi.module";
@@ -103,7 +103,7 @@ export class ApimDesignModule implements IInjectorModule {
         injector.bindModule(new ValidationSummaryEditorModule());
         injector.bindModule(new ValidationSummaryModule());
         injector.bindSingleton("app", App);
-        injector.bindSingleton("logger", ConsoleLogger);
+        injector.bindInstance("logger", new AppInsightsLogger("4489976c-5bb8-4ff4-b071-6d5196917dfa"));
         injector.bindSingleton("blobStorage", AzureBlobStorage);
         injector.bindSingleton("tenantService", TenantService);
         injector.bindSingleton("backendService", BackendService);
