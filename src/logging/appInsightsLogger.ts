@@ -5,7 +5,7 @@ import { AppInsights } from "applicationinsights-js";
 
 export class AppInsightsLogger implements Logger {
     constructor(private readonly instrumentationKey: string) {
-        if (this.instrumentationKey && location.hostname.endsWith(".net")) {
+        if (this.instrumentationKey) {
             AppInsights.downloadAndSetup({ instrumentationKey: this.instrumentationKey });
         }
         else {
