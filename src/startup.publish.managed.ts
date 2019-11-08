@@ -30,7 +30,8 @@ export class Publisher {
             managementApiAccessToken: this.configuration.managementApiAccessToken,
             blobStorageContainer: this.configuration.inputStorageContainer,
             blobStorageConnectionString: this.configuration.inputStorageConnectionString,
-            environment: "publishing"
+            environment: "publishing",
+            backendUrl: "http://127.0.0.1:30006"
         });
 
         /* Initializing dependency injection container */
