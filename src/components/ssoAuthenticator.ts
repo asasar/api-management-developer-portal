@@ -6,14 +6,12 @@ import { IAuthenticator, AccessToken } from "./../authentication";
 const accessTokenSetting = "accessToken";
 
 export class SsoAuthenticator implements IAuthenticator {
-    public getAccessToken(): string {
+    public getAccessToken(): Promise<string> {
         let accessToken = null;
 
         if (location.pathname.startsWith("/signin-sso")) {
             accessToken = "SharedAccessSignature " + location.href.split("?token=").pop();
             sessionStorage.setItem(accessTokenSetting, accessToken);
-
-            // this.router.navigateTo("/");
             window.location.assign("/");
         }
         else {
@@ -23,21 +21,26 @@ export class SsoAuthenticator implements IAuthenticator {
         return accessToken;
     }
 
-    public setAccessToken(accessToken: string): void {
-        const ssoRequired = !sessionStorage.getItem(accessTokenSetting);
-        sessionStorage.setItem(accessTokenSetting, accessToken);
+    public setAccessToken(accessToken: string): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const ssoRequired = !sessionStorage.getItem(accessTokenSetting);
+            sessionStorage.setItem(accessTokenSetting, accessToken);
 
-        if (ssoRequired) {
-            window.location.assign(`/signin-sso?token=${accessToken.replace("SharedAccessSignature ", "")}`);
-        }
+            if (ssoRequired) {
+                window.location.assign(`/signin-sso?token=${accessToken.replace("SharedAccessSignature ", "")}`);
+            }
+            else {
+                resolve();
+            }
+        });
     }
 
-    public clearAccessToken(): void {
+    public async clearAccessToken(): Promise<void> {
         sessionStorage.removeItem("accessToken");
     }
 
-    public isAuthenticated(): boolean {
-        const accessToken = this.getAccessToken();
+    public async isAuthenticated(): Promise<boolean> {
+        const accessToken = await this.getAccessToken();
 
         if (!accessToken) {
             return false;
