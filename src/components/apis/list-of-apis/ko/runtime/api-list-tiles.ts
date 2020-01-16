@@ -14,8 +14,7 @@ import { RouteHelper } from "../../../../../routing/routeHelper";
 })
 @Component({
     selector: "api-list-tiles",
-    template: template,
-    injectable: "apiListTiles"
+    template: template
 })
 export class ApiListTiles {
     public readonly apis: ko.ObservableArray<Api>;
@@ -45,16 +44,23 @@ export class ApiListTiles {
         this.hasPager = ko.computed(() => this.hasPrevPage() || this.hasNextPage());
         this.apiGroups = ko.observableArray();
         this.groupByTag = ko.observable(false);
+        this.defaultGroupByTagToEnabled = ko.observable(false);
     }
 
     @Param()
     public allowSelection: ko.Observable<boolean>;
 
     @Param()
+    public defaultGroupByTagToEnabled: ko.Observable<boolean>;
+
+    @Param()
     public detailsPageUrl: ko.Observable<string>;
 
     @OnMounted()
     public async initialize(): Promise<void> {
+
+        this.groupByTag(this.defaultGroupByTagToEnabled());
+
         await this.resetSearch();
 
         this.pattern

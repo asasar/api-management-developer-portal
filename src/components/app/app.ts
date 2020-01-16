@@ -9,8 +9,7 @@ const startupError = `Unable to start the portal`;
 
 @Component({
     selector: "app",
-    template: template,
-    injectable: "app"
+    template: template
 })
 export class App {
     constructor(
@@ -69,7 +68,7 @@ export class App {
             this.viewManager.showToolboxes();
         }
         catch (error) {
-            this.viewManager.addToast(startupError, `See if settings are specified correctly in the configuration file <i>config.design.json</i>`);
+            this.viewManager.addToast(startupError, `Check if the settings specified in the configuration file <i>config.design.json</i> are correct or refer to the <a href="http://aka.ms/apimdocs/portal#faq" target="_blank">frequently asked questions</a>.`);
         }
     }
 }
