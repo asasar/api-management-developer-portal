@@ -6,14 +6,17 @@ import { Component, RuntimeComponent, OnMounted, OnDestroyed, Param } from "@pap
 import { Api } from "../../../../../models/api";
 import { Operation } from "../../../../../models/operation";
 import { ApiService } from "../../../../../services/apiService";
-import { TypeDefinition, TypeDefinitionObjectProperty, TypeDefinitionProperty } from "../../../../../models/typeDefinition";
+import { TypeDefinition, TypeDefinitionProperty } from "../../../../../models/typeDefinition";
 import { RouteHelper } from "../../../../../routing/routeHelper";
 import { TenantService } from "../../../../../services/tenantService";
 import { SwaggerObject } from "./../../../../../contracts/swaggerObject";
 import { Utils } from "../../../../../utils";
+import { TypeOfApi } from "../../../../../constants";
 
 
-@RuntimeComponent({ selector: "operation-details" })
+@RuntimeComponent({
+    selector: "operation-details"
+})
 @Component({
     selector: "operation-details",
     template: template
@@ -58,6 +61,11 @@ export class OperationDetails {
             const operation = this.operation();
             const hostname = this.primaryHostname();
             const apiPath = api.versionedPath;
+
+            if (api.type === TypeOfApi.soap) {
+                return `https://${hostname}/${apiPath}`;
+            }
+
             const operationPath = operation.displayUrlTemplate;
 
             return `https://${hostname}/${apiPath}${operationPath}`;
@@ -147,7 +155,7 @@ export class OperationDetails {
                     schemaIds.push(schemaId);
                 }
             });
-        
+
         const typeNames = prepresentations.filter(p => !!p.typeName).map(p => p.typeName).filter((item, pos, self) => self.indexOf(item) === pos);
 
         const schemasPromises = schemaIds.map(schemaId => this.apiService.getApiSchema(`${apiId}/${schemaId}`));
@@ -155,14 +163,14 @@ export class OperationDetails {
         const definitions = schemas.map(x => x.definitions).flat();
 
         let lookupResult = [...typeNames];
-        while (lookupResult.length > 0) {            
+        while (lookupResult.length > 0) {
             const references = definitions.filter(d => lookupResult.indexOf(d.name) !== -1);
 
             lookupResult = references.length === 0 ? [] : this.lookupReferences(references, typeNames);
             if (lookupResult.length > 0) {
                 typeNames.push(...lookupResult);
             }
-        } 
+        }
 
         this.definitions(definitions.filter(d => typeNames.indexOf(d.name) !== -1));
     }
@@ -217,18 +225,9 @@ export class OperationDetails {
             definition.name = representation.typeName;
         }
 
-        if (representation.sample) {
-            definition.example = representation.sample;
-
-            if (representation.contentType.contains("/xml")) {
-                definition.example = Utils.formatXml(representation.sample);
-                definition.exampleFormat = "xml";
-            }
-
-            if (representation.contentType.contains("/json")) {
-                definition.example = Utils.formatJson(representation.sample);
-                definition.exampleFormat = "json";
-            }
+        if (representation.example) {
+            definition.example = representation.example;
+            definition.exampleFormat = representation.exampleFormat;
         }
 
         return definition;

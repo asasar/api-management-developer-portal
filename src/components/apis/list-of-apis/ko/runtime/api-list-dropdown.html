@@ -1,15 +1,19 @@
-<div class="dropdown-container">
-    <div class="form-control" tabindex="0" role="button" aria-label="APIs"
-        data-bind="activate: toggle, css: { expanded: expanded }, attr: { 'aria-expanded': expanded().toString() }">
+<div class="dropdown-container collapsible">
+    <div class="form-control" tabindex="0" role="button" aria-label="APIs" data-toggle="collapsible">
         <div class="input-group">
-            <div class="input" data-bind="text: selection"></div>
+            <div class="input">
+                <span data-bind="text: selection"></span>
+                <!-- ko if: selectedApi() && selectedApi().type === 'soap' -->
+                <span class="badge badge-soap">SOAP</span>
+                <!-- /ko -->
+            </div>
             <div class="input-group-append">
                 <i class="icon icon-chevron-down"></i>
             </div>
         </div>
     </div>
 
-    <div class="collapsible-dropdown" data-bind="visible: expanded">
+    <div class="collapsible-dropdown collapsible-content">
         <div class="search-input">
             <input type="search" role="searchbox" aria-label="Search" placeholder="Search APIs"
                 data-bind="textInput: pattern" autofocus />
@@ -33,6 +37,9 @@
                     <!-- ko foreach: { data: group.items, as: 'item' } -->
                     <a href="#" role="listitem" class="nav-link text-truncate" data-bind="attr: { href: $component.getReferenceUrl(item) }">
                         <span data-bind="text: item.displayName"></span>
+                        <!-- ko if: item.type === 'soap' -->
+                        <span class="badge badge-soap">SOAP</span>
+                        <!-- /ko -->
                         <!-- ko if: item.apiVersion -->
                         - <span data-bind="text: item.apiVersion"></span>
                         <!-- /ko -->

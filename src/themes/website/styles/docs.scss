@@ -333,11 +333,12 @@ product-list-runtime,
 product-subscribe-runtime,
 product-subscriptions-runtime,
 reset-password-runtime,
-user-details,
-user-signin,
-user-signup-runtime,
-user-signup-social-runtime,
-user-subscriptions,
+profile-runtime,
+signin-runtime,
+signup-runtime,
+signin-social-runtime,
+signup-social-runtime,
+subscriptions-runtime,
 validation-summary {
     flex-basis: 100%;
     max-width: 100%;
@@ -381,4 +382,25 @@ operation-console {
             border-left: 1px solid #ccc;
         }
     }
+}
+
+.badge {
+    background: none;
+    border: 1px solid #aaa;
+    color: #636363;
+    border-radius: 0;
+}
+
+.badge-soap {
+    display: inline;
+    font-weight: normal;
+    font-family: Menlo,Monaco,Consolas,"Courier New",monospace;
+    font-size: 10px;
+    padding: 0 2px;
+    margin: 2px;
+
+    order: 1;
+    vertical-align: middle;
+    display: inline;
+    line-height: 1.7em;
 }

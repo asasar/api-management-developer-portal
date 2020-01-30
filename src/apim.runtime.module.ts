@@ -32,13 +32,13 @@ import { ProductService } from "./services/productService";
 import { FileInput } from "./components/file-input/file-input";
 import { MapiClient } from "./services/mapiClient";
 import { UsersService } from "./services/usersService";
-import { UserSignin } from "./components/users/user-signin/ko/runtime/user-signin";
-import { SignInAad } from "./components/users/user-signin-social/ko/runtime/signin-aad";
-import { SignInAadB2C } from "./components/users/user-signin-social/ko/runtime/signin-aad-b2c";
-import { UserSignup } from "./components/users/user-signup/ko/runtime/user-signup";
-import { UserSignupSocial } from "./components/users/user-signup-social/ko/runtime/user-signup-social";
-import { UserDetails } from "./components/users/user-details/ko/runtime/user-details";
-import { UserSubscriptions } from "./components/users/user-subscriptions/ko/runtime/user-subscriptions";
+import { Signin } from "./components/users/signin/ko/runtime/signin";
+import { SignInAad } from "./components/users/signin-social/ko/runtime/signin-aad";
+import { SignInAadB2C } from "./components/users/signin-social/ko/runtime/signin-aad-b2c";
+import { Signup } from "./components/users/signup/ko/runtime/signup";
+import { SignupSocial } from "./components/users/signup-social/ko/runtime/signup-social";
+import { Profile } from "./components/users/profile/ko/runtime/profile";
+import { Subscriptions } from "./components/users/subscriptions/ko/runtime/subscriptions";
 import { ProductList } from "./components/products/product-list/ko/runtime/product-list";
 import { ProductDetails } from "./components/products/product-details/ko/runtime/product-details";
 import { ProductSubscribe } from "./components/products/product-subscribe/ko/runtime/product-subscribe";
@@ -58,10 +58,12 @@ import { UnhandledErrorHandler } from "./bindingHandlers/unhandledErrorHandler";
 import { ProductListDropdown } from "./components/products/product-list/ko/runtime/product-list-dropdown";
 import { ValidationSummary } from "./components/users/validation-summary/ko/runtime/validation-summary";
 import { TypeDefinitionViewModel } from "./components/operations/operation-details/ko/runtime/type-definition";
+import { CodeSampleViewModel } from "./components/operations/operation-details/ko/runtime/code-sample";
 import { VisibilityGuard } from "@paperbits/common/user";
 import { StaticUserService } from "./services";
 import { SignOutRouteGuard } from "./routing/signOutRouteGuard";
 import { ProvisionService } from "./services/provisioningService";
+
 
 export class ApimRuntimeModule implements IInjectorModule {
     public register(injector: IInjector): void {
@@ -82,18 +84,19 @@ export class ApimRuntimeModule implements IInjectorModule {
         injector.bind("operationDetails", OperationDetails);
         injector.bind("operationConsole", OperationConsole);
         injector.bind("typeDefinition", TypeDefinitionViewModel);
+        injector.bind("codeSample", CodeSampleViewModel);
         injector.bind("fileInput", FileInput);
         injector.bind("apiService", ApiService);
         injector.bind("tagService", TagService);
         injector.bind("productService", ProductService);
         injector.bind("analyticsService", AnalyticsService);
-        injector.bind("userSignin", UserSignin);
+        injector.bind("signin", Signin);
         injector.bind("signInAad", SignInAad);
         injector.bind("signInAadB2C", SignInAadB2C);
-        injector.bind("userSignup", UserSignup);
-        injector.bind("userSignupSocial", UserSignupSocial);
-        injector.bind("userDetails", UserDetails);
-        injector.bind("userSubscriptions", UserSubscriptions);
+        injector.bind("signup", Signup);
+        injector.bind("signupSocial", SignupSocial);
+        injector.bind("profile", Profile);
+        injector.bind("subscriptions", Subscriptions);
         injector.bind("productList", ProductList);
         injector.bind("productListDropdown", ProductListDropdown);
         injector.bind("validationSummary", ValidationSummary);
