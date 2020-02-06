@@ -7,6 +7,7 @@ import { StyleModule } from "@paperbits/styles/styles.module";
 import { ProseMirrorModule } from "@paperbits/prosemirror/prosemirror.module";
 import { StaticSettingsProvider } from "./components/staticSettingsProvider";
 import { ApimPublishModule } from "./apim.publish.module";
+import { GoogleTagManagerPublishModule } from "@paperbits/gtm/gtm.publish.module";
 
 /* Allowing self-signed certificates for HTTP requests */
 process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
@@ -41,6 +42,7 @@ export class Publisher {
         injector.bindModule(new StyleModule());
         injector.bindModule(new ProseMirrorModule());
         injector.bindModule(new ApimPublishModule());
+        injector.bindModule(new GoogleTagManagerPublishModule());
         injector.bindInstance("settingsProvider", settingsProvider);
         injector.bindInstance("outputBlobStorage", this.outputBlobStorage);
         injector.resolve("autostart");
