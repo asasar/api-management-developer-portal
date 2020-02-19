@@ -30,7 +30,7 @@ export class ConsoleOperation {
         this.request = new ConsoleRequest(operation.request);
         this.templateParameters = ko.observableArray(operation.templateParameters.map(parameterContract => new ConsoleParameter(parameterContract)));
         this.hasBody = !["GET", "HEAD", "TRACE"].includes(this.method);
-
+    
         if (operation.responses) {
             this.responses = operation.responses.map(x => new ConsoleResponse(x));
         }
@@ -62,6 +62,7 @@ export class ConsoleOperation {
         return header;
     }
 
+
     public createHeader(name: string, value: string, type: string, description: string): ConsoleHeader {
         const header = new ConsoleHeader();
         header.name(name);
@@ -74,7 +75,6 @@ export class ConsoleOperation {
 
     private getRequestPath(): string {
         let versionPath = "";
-        const revision = "";
 
         if (this.api.apiVersionSet && this.api.apiVersion && this.api.apiVersionSet.versioningScheme === "Segment") {
             versionPath = `/${this.api.apiVersion}`;
@@ -85,15 +85,13 @@ export class ConsoleOperation {
 
         parameters.forEach(parameter => {
             if (parameter.value()) {
-                const parameterPlaceholder = `{${parameter.name}}`;
-                const parameterName = encodeURIComponent(parameter.name());
-                const parameterValue = encodeURIComponent(parameter.value());
+                const parameterPlaceholder = parameter.name() !== "*" ? `{${parameter.name()}}` : "*";
 
                 if (requestUrl.indexOf(parameterPlaceholder) > -1) {
-                    requestUrl = requestUrl.replace(parameterPlaceholder, parameterValue);
+                    requestUrl = requestUrl.replace(parameterPlaceholder, encodeURI(parameter.value()));
                 }
                 else {
-                    requestUrl = this.addParam(requestUrl, parameterName, parameterValue);
+                    requestUrl = this.addParam(requestUrl, encodeURI(parameter.name()), encodeURI(parameter.value()));
                 }
             }
         });
@@ -102,7 +100,7 @@ export class ConsoleOperation {
             requestUrl = this.addParam(requestUrl, this.api.apiVersionSet.versionQueryName, this.api.apiVersion);
         }
 
-        return `${this.api.path}${versionPath}${revision}${requestUrl}`;
+        return `${this.api.path}${versionPath}${requestUrl}`;
     }
 
 }
