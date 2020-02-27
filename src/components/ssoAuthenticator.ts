@@ -2,20 +2,34 @@
 import * as moment from "moment";
 import { Utils } from "../utils";
 import { IAuthenticator, AccessToken } from "./../authentication";
+import { HttpClient, HttpHeader } from "@paperbits/common/http";
 
 const accessTokenSetting = "accessToken";
 
 export class SsoAuthenticator implements IAuthenticator {
-    public getAccessToken(): Promise<string> {
+    constructor( private httpClient: HttpClient){}
+    
+    public async getAccessToken(): Promise<string> {
         let accessToken = null;
 
         if (location.pathname.startsWith("/signin-sso")) {
-            accessToken = "SharedAccessSignature " + location.href.split("?token=").pop();
+            accessToken = `SharedAccessSignature ${location.href.split("?token=").pop()}`;
             sessionStorage.setItem(accessTokenSetting, accessToken);
             window.location.assign("/");
-        }
-        else {
+        } else {
             accessToken = sessionStorage.getItem(accessTokenSetting);
+            if (!accessToken) {
+                try {
+                    const response = await this.httpClient.send<string>({ url: "/token", method: "GET" });
+                    if (response.statusCode === 200) {
+                        const token = response.toText();
+                        accessToken = `SharedAccessSignature ${token}`;
+                        sessionStorage.setItem(accessTokenSetting, accessToken);
+                    }
+                } catch (error) {
+                    console.error("Error on token request: ", error);
+                }
+            }
         }
 
         return accessToken;
@@ -35,8 +49,45 @@ export class SsoAuthenticator implements IAuthenticator {
         });
     }
 
-    public async clearAccessToken(): Promise<void> {
-        sessionStorage.removeItem("accessToken");
+    public async refreshAccessTokenFromHeader(responseHeaders: HttpHeader[] = []): Promise<string> {
+        const accessTokenHeader = responseHeaders.find(x => x.name.toLowerCase() === "ocp-apim-sas-token");
+        if (accessTokenHeader && accessTokenHeader.value) {
+            const regex = /token=\"(.*)",refresh/gm;
+            const match = regex.exec(accessTokenHeader.value);
+
+            if (!match || match.length < 2) {
+                console.error(`Token format is not valid.`);
+            }
+
+            const accessToken = `SharedAccessSignature ${accessTokenHeader.value}`;
+            const current = sessionStorage.getItem("accessToken");
+            if (current !== accessToken) {
+                sessionStorage.setItem("accessToken", accessToken);
+
+                try {
+                    await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessToken }] });
+                } catch (error) {
+                    console.error("Error on sso-refresh: ", error);
+                }                
+                
+                return accessToken;
+            }
+        }
+        return undefined;
+    }
+
+    public async clearAccessToken(cleanOnlyClient?: boolean): Promise<void> {
+        const token = sessionStorage.getItem("accessToken");
+        if (token) {
+            sessionStorage.removeItem("accessToken");
+            if (!cleanOnlyClient) {
+                try {
+                    await this.httpClient.send<any>({ url: "/signout", method: "GET", headers: [{ name: "Authorization", value: token }] });
+                } catch (error) {
+                    console.error("Error on clearAccessToken: ", error);
+                }
+            }
+        }
     }
 
     public async isAuthenticated(): Promise<boolean> {
@@ -57,7 +108,16 @@ export class SsoAuthenticator implements IAuthenticator {
         return now < parsedToken.expires;
     }
 
-    private parseSharedAccessSignature(accessToken: string): AccessToken {
+    private parseSharedAccessSignature(fullAccessToken: string): AccessToken {
+        let accessToken = fullAccessToken;
+        const refreshRegex = /token=\"(.*)",refresh/gm;
+        const refreshMatch = refreshRegex.exec(fullAccessToken);
+        if (!refreshMatch || refreshMatch.length < 2) {
+            console.warn(`Token is not full.`);
+        } else {
+            accessToken = refreshMatch[1];
+        } 
+
         const regex = /^[\w\-]*\&(\d*)\&/gm;
         const match = regex.exec(accessToken);
 
