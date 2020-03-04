@@ -18,18 +18,18 @@ export class SsoAuthenticator implements IAuthenticator {
             window.location.assign("/");
         } else {
             accessToken = sessionStorage.getItem(accessTokenSetting);
-            if (!accessToken) {
-                try {
-                    const response = await this.httpClient.send<string>({ url: "/token", method: "GET" });
-                    if (response.statusCode === 200) {
-                        const token = response.toText();
-                        accessToken = `SharedAccessSignature ${token}`;
-                        sessionStorage.setItem(accessTokenSetting, accessToken);
-                    }
-                } catch (error) {
-                    console.error("Error on token request: ", error);
-                }
-            }
+            // if (!accessToken) {
+            //     try {
+            //         const response = await this.httpClient.send<string>({ url: "/token", method: "GET" });
+            //         if (response.statusCode === 200) {
+            //             const token = response.toText();
+            //             accessToken = `SharedAccessSignature ${token}`;
+            //             sessionStorage.setItem(accessTokenSetting, accessToken);
+            //         }
+            //     } catch (error) {
+            //         console.error("Error on token request: ", error);
+            //     }
+            // }
         }
 
         return accessToken;
@@ -64,11 +64,11 @@ export class SsoAuthenticator implements IAuthenticator {
             if (current !== accessToken) {
                 sessionStorage.setItem("accessToken", accessToken);
 
-                try {
-                    await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessToken }] });
-                } catch (error) {
-                    console.error("Error on sso-refresh: ", error);
-                }                
+                // try {
+                //     await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessToken }] });
+                // } catch (error) {
+                //     console.error("Error on sso-refresh: ", error);
+                // }                
                 
                 return accessToken;
             }
