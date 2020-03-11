@@ -12,5 +12,6 @@ export class UnhandledErrorHandler {
 
     public handlerError(event: ErrorEvent): void {
         this.logger.traceError(event.error);
+        this.router.navigateTo(pageUrl500);
     }
 }
