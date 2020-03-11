@@ -1,10 +1,10 @@
-// import { Router } from "@paperbits/common/routing";
 import * as moment from "moment";
 import { Utils } from "../utils";
 import { IAuthenticator, AccessToken } from "./../authentication";
 import { HttpClient, HttpHeader } from "@paperbits/common/http";
 
 const accessTokenSetting = "accessToken";
+const serverTokenSetting = "serverToken";
 
 export class SsoAuthenticator implements IAuthenticator {
     constructor( private httpClient: HttpClient){}
@@ -13,23 +13,30 @@ export class SsoAuthenticator implements IAuthenticator {
         let accessToken = null;
 
         if (location.pathname.startsWith("/signin-sso")) {
-            accessToken = `SharedAccessSignature ${location.href.split("?token=").pop()}`;
+            const token = decodeURIComponent(location.href.split("?token=").pop());
+            accessToken = `SharedAccessSignature ${token}`;
             sessionStorage.setItem(accessTokenSetting, accessToken);
             window.location.assign("/");
         } else {
             accessToken = sessionStorage.getItem(accessTokenSetting);
-            // if (!accessToken) {
-            //     try {
-            //         const response = await this.httpClient.send<string>({ url: "/token", method: "GET" });
-            //         if (response.statusCode === 200) {
-            //             const token = response.toText();
-            //             accessToken = `SharedAccessSignature ${token}`;
-            //             sessionStorage.setItem(accessTokenSetting, accessToken);
-            //         }
-            //     } catch (error) {
-            //         console.error("Error on token request: ", error);
-            //     }
-            // }
+            if (!accessToken) {
+                try {
+                    const response = await this.httpClient.send<string>({ url: "/token", method: "GET" });
+                    if (response.statusCode === 200) {
+                        const token = response.toText();
+                        accessToken = `SharedAccessSignature ${token}`;
+                        sessionStorage.setItem(accessTokenSetting, accessToken);
+                        sessionStorage.setItem(serverTokenSetting, accessToken);
+                    }
+                } catch (error) {
+                    console.error("Error on token request: ", error);
+                }
+            } else {
+                if (this.isTokenExpired(accessToken)) {
+                    await this.clearAccessToken();
+                    return null;
+                }
+            }
         }
 
         return accessToken;
@@ -38,7 +45,7 @@ export class SsoAuthenticator implements IAuthenticator {
     public setAccessToken(accessToken: string): Promise<void> {
         return new Promise<void>((resolve) => {
             const ssoRequired = !sessionStorage.getItem(accessTokenSetting);
-            sessionStorage.setItem(accessTokenSetting, accessToken);
+            sessionStorage.setItem(accessTokenSetting, decodeURIComponent(accessToken));
 
             if (ssoRequired) {
                 window.location.assign(`/signin-sso?token=${accessToken.replace("SharedAccessSignature ", "")}`);
@@ -60,29 +67,48 @@ export class SsoAuthenticator implements IAuthenticator {
             }
 
             const accessToken = `SharedAccessSignature ${accessTokenHeader.value}`;
-            const current = sessionStorage.getItem("accessToken");
+            const current = sessionStorage.getItem(accessTokenSetting);
             if (current !== accessToken) {
-                sessionStorage.setItem("accessToken", accessToken);
+                sessionStorage.setItem(accessTokenSetting, accessToken);
 
-                // try {
-                //     await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessToken }] });
-                // } catch (error) {
-                //     console.error("Error on sso-refresh: ", error);
-                // }                
+                try {
+                    await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessToken }] });
+                    sessionStorage.setItem(serverTokenSetting, accessToken);
+                } catch (error) {
+                    console.error("Error on sso-refresh: ", error);
+                }                
                 
                 return accessToken;
+            }
+        }
+        
+        const serverToken = sessionStorage.getItem(serverTokenSetting);
+        if (!serverToken) {            
+            const clientToken = sessionStorage.getItem(accessTokenSetting);
+            if (clientToken) {
+                if (this.isTokenExpired(clientToken)) {
+                    await this.clearAccessToken(true);
+                } else {
+                    try {
+                        await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: clientToken }] });
+                        sessionStorage.setItem(serverTokenSetting, clientToken);
+                    } catch (error) {
+                        console.error("Error on sso-refresh: ", error);
+                    }  
+                }
             }
         }
         return undefined;
     }
 
     public async clearAccessToken(cleanOnlyClient?: boolean): Promise<void> {
-        const token = sessionStorage.getItem("accessToken");
+        const token = sessionStorage.getItem(accessTokenSetting);
         if (token) {
-            sessionStorage.removeItem("accessToken");
+            sessionStorage.removeItem(accessTokenSetting);
             if (!cleanOnlyClient) {
                 try {
                     await this.httpClient.send<any>({ url: "/signout", method: "GET", headers: [{ name: "Authorization", value: token }] });
+                    sessionStorage.removeItem(serverTokenSetting);
                 } catch (error) {
                     console.error("Error on clearAccessToken: ", error);
                 }
@@ -92,20 +118,27 @@ export class SsoAuthenticator implements IAuthenticator {
 
     public async isAuthenticated(): Promise<boolean> {
         const accessToken = await this.getAccessToken();
+        return !!accessToken;
+    }
 
-        if (!accessToken) {
-            return false;
+    public parseAccessToken(token: string): AccessToken {
+        if (!token) {
+            throw new Error("Access token is missing.");
         }
 
-        const parsedToken = this.parseAccessToken(accessToken);
+        let accessToken: AccessToken;
 
-        if (!parsedToken) {
-            return false;
+        if (token.startsWith("Bearer ")) {
+            accessToken = this.parseBearerToken(token.replace("Bearer ", ""));
+            return accessToken;
         }
 
-        const now = Utils.getUtcDateTime();
+        if (token.startsWith("SharedAccessSignature ")) {
+            accessToken = this.parseSharedAccessSignature(token.replace("SharedAccessSignature ", ""));
+            return accessToken;
+        }
 
-        return now < parsedToken.expires;
+        throw new Error(`Access token format is not valid. Please use "Bearer" or "SharedAccessSignature".`);
     }
 
     private parseSharedAccessSignature(fullAccessToken: string): AccessToken {
@@ -139,23 +172,10 @@ export class SsoAuthenticator implements IAuthenticator {
         return { type: "Bearer", expires: exp, value: accessToken };
     }
 
-    public parseAccessToken(token: string): AccessToken {
-        if (!token) {
-            throw new Error("Access token is missing.");
-        }
+    private isTokenExpired(accessToken: string): boolean {
+        const parsedToken = this.parseAccessToken(accessToken);
+        const now = Utils.getUtcDateTime();
 
-        let accessToken: AccessToken;
-
-        if (token.startsWith("Bearer ")) {
-            accessToken = this.parseBearerToken(token.replace("Bearer ", ""));
-            return accessToken;
-        }
-
-        if (token.startsWith("SharedAccessSignature ")) {
-            accessToken = this.parseSharedAccessSignature(token.replace("SharedAccessSignature ", ""));
-            return accessToken;
-        }
-
-        throw new Error(`Access token format is not valid. Please use "Bearer" or "SharedAccessSignature".`);
+        return (now > parsedToken.expires);
     }
 }
