@@ -72,7 +72,7 @@ export class SsoAuthenticator implements IAuthenticator {
                 sessionStorage.setItem(accessTokenSetting, accessToken);
 
                 try {
-                    await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessToken }] });
+                    await this.httpClient.send<any>({ url: "/sso-refresh", method: "GET", headers: [{ name: "Authorization", value: accessTokenHeader.value }] });
                     sessionStorage.setItem(serverTokenSetting, accessToken);
                 } catch (error) {
                     console.error("Error on sso-refresh: ", error);
@@ -149,7 +149,7 @@ export class SsoAuthenticator implements IAuthenticator {
             console.warn(`Token is not full.`);
         } else {
             accessToken = refreshMatch[1];
-        } 
+        }
 
         const regex = /^[\w\-]*\&(\d*)\&/gm;
         const match = regex.exec(accessToken);
